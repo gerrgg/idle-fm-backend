@@ -9,7 +9,8 @@
     "dev:api": "NODE_ENV=development node --env-file=.env.development server.js",
     "prod": "node --env-file=.env.production server.js",
     "lint": "eslint .",
-    "start": "npm run prod"
+    "start": "npm run prod",
+    "seed": "node seeds/runSeed.js"
   },
   "keywords": [],
   "author": "",
@@ -20,5 +21,8 @@
     "express": "^5.1.0",
     "mssql": "^12.0.0"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@flydotio/dockerfile": "^0.7.10"
+  }
 }
