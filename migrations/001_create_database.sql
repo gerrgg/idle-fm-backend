@@ -1,0 +1,61 @@
+USE idle_fm_dev;
+
+-- USERS
+CREATE TABLE Users (
+  id INT IDENTITY(1,1) PRIMARY KEY,
+  username NVARCHAR(255) NOT NULL,
+  email NVARCHAR(255) NOT NULL UNIQUE,
+  password_hash NVARCHAR(255) NOT NULL,
+  activation_hash NVARCHAR(255),
+  activation_expires DATETIMEOFFSET DEFAULT DATEADD(HOUR, 24, SYSDATETIMEOFFSET()),
+  activated_at DATETIMEOFFSET NULL,
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+
+-- PLAYLISTS
+CREATE TABLE Playlists (
+  id INT IDENTITY(1,1) PRIMARY KEY,
+  user_id INT NOT NULL,
+  title NVARCHAR(255) NOT NULL,
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+  views INT DEFAULT 0,
+  likes INT DEFAULT 0,
+  shares INT DEFAULT 0,
+  is_public BIT DEFAULT 1,
+  FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+);
+
+-- VIDEOS
+CREATE TABLE Videos (
+  id INT IDENTITY(1,1) PRIMARY KEY,
+  youtube_key NVARCHAR(50) NOT NULL UNIQUE,
+  title NVARCHAR(255),
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+
+CREATE INDEX idx_videos_youtube_key ON Videos(youtube_key);
+
+-- GIFS
+CREATE TABLE Gifs (
+  id INT IDENTITY(1,1) PRIMARY KEY,
+  tenor_key NVARCHAR(100) NOT NULL UNIQUE,
+  title NVARCHAR(255),
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+
+CREATE INDEX idx_gifs_tenor_key ON Gifs(tenor_key);
+
+-- PLAYLISTVIDEOS (Join Table)
+CREATE TABLE PlaylistVideos (
+  playlist_id INT NOT NULL,
+  video_id INT NOT NULL,
+  gif_id INT NULL,
+  position INT,
+  added_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+  PRIMARY KEY (playlist_id, video_id),
+  FOREIGN KEY (playlist_id) REFERENCES Playlists(id) ON DELETE CASCADE,
+  FOREIGN KEY (video_id) REFERENCES Videos(id) ON DELETE CASCADE,
+  FOREIGN KEY (gif_id) REFERENCES Gifs(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_playlistvideos_position ON PlaylistVideos(playlist_id, position);
