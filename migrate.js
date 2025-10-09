@@ -1,11 +1,11 @@
 import fs from "fs";
 import path from "path";
-import sql from "mssql";
 import { getPool } from "./db.js";
 
 const migrationsDir = path.resolve("./migrations");
 const dbName = process.env.MSSQL_DATABASE;
 
+// Ensures migrations tracking table exists
 async function ensureMigrationsTable(pool) {
   await pool.request().query(`
     IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='__migrations' AND xtype='U')
@@ -24,6 +24,27 @@ async function listApplied(pool) {
   return recordset.map((r) => r.name);
 }
 
+// --- FIX: Split SQL statements on "GO" ---
+async function runSqlFile(pool, filePath) {
+  const sqlText = fs.readFileSync(filePath, "utf8");
+
+  // Split on GO (case-insensitive, surrounded by newlines)
+  const statements = sqlText
+    .split(/^\s*GO\s*$/gim)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  for (const statement of statements) {
+    try {
+      await pool.request().batch(statement);
+    } catch (err) {
+      console.error(`❌ Error running statement in ${filePath}:`, err.message);
+      throw err;
+    }
+  }
+}
+
+// --- Apply all new migrations ---
 async function applyMigrations(pool) {
   const applied = new Set(await listApplied(pool));
   const files = fs
@@ -34,8 +55,7 @@ async function applyMigrations(pool) {
   for (const file of files) {
     if (applied.has(file)) continue;
     console.log(`🟢 Running migration: ${file}`);
-    const sqlText = fs.readFileSync(path.join(migrationsDir, file), "utf8");
-    await pool.request().batch(sqlText);
+    await runSqlFile(pool, path.join(migrationsDir, file));
     await pool
       .request()
       .input("name", file)
@@ -63,8 +83,7 @@ async function rollbackLast(pool) {
   }
 
   console.log(`⏪ Rolling back migration: ${last}`);
-  const sqlText = fs.readFileSync(rollbackFile, "utf8");
-  await pool.request().batch(sqlText);
+  await runSqlFile(pool, rollbackFile);
   await pool
     .request()
     .input("name", last)
@@ -78,7 +97,7 @@ async function resetDatabase() {
     server: process.env.MSSQL_SERVER,
     user: process.env.MSSQL_USER,
     password: process.env.MSSQL_PASSWORD,
-    options: { encrypt: false, trustServerCertificate: true },
+    options: { encrypt: true, trustServerCertificate: false },
   });
 
   await adminPool.request().query(`
@@ -90,6 +109,7 @@ async function resetDatabase() {
   await adminPool.close();
 }
 
+// --- Entrypoint ---
 async function run() {
   const args = process.argv.slice(2);
   const reset = args.includes("--reset");

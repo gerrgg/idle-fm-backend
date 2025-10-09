@@ -1,5 +1,3 @@
-USE idle_fm_dev;
-
 -- USERS
 CREATE TABLE Users (
   id INT IDENTITY(1,1) PRIMARY KEY,

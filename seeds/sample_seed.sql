@@ -1,5 +1,3 @@
-USE idle_fm_dev;
-
 -- USERS (mock)
 INSERT INTO Users (username, email, password_hash, activation_hash, activated_at)
 VALUES
