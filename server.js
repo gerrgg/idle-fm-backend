@@ -1,14 +1,11 @@
 import express from "express";
 import cors from "cors";
-import sql from "mssql";
-import { dbConfig, isProduction } from "./config/dbConfig.js";
-import { getPool } from "./db.js";
+import { isProduction } from "./config/dbConfig.js";
 
 import usersRouter from "./routes/users.js";
 import videosRouter from "./routes/videos.js";
 import playlistsRouter from "./routes/playlists.js";
 import gifsRouter from "./routes/gifs.js";
-import playlistsVideosRouter from "./routes/playlistsVideos.js";
 
 const app = express();
 

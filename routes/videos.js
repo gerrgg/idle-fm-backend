@@ -1,17 +1,14 @@
 import express from "express";
-import { getPool } from "../db.js";
+import { queryDB, asyncHandler } from "../utils/dbHelpers.js";
 
 const router = express.Router();
 
-router.get("/", async (req, res) => {
-  try {
-    const pool = await getPool();
-    const result = await pool.request().query("SELECT * FROM Videos");
-    res.json(result.recordset);
-  } catch (err) {
-    console.error("❌ Videos endpoint error:", err);
-    res.status(500).json({ error: "Database error", details: err.message });
-  }
-});
+router.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const videos = await queryDB("SELECT * FROM Videos");
+    res.json(videos);
+  })
+);
 
 export default router;
