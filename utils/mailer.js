@@ -56,6 +56,28 @@ export async function sendActivationEmail(to, username, activationUrl) {
 
   console.log(`📨 Email sent: ${info.messageId}`);
 
-  // This is the magic part 👇
+  console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+}
+
+// ✉️ Send password reset email
+export async function sendPasswordResetEmail(to, username, reset) {
+  const transport = await getTransporter();
+
+  const message = {
+    from: '"Idle.fm" <no-reply@idle.fm>',
+    to,
+    subject: "Password Reset Request",
+    html: `<h2>Hello, ${username}!</h2>
+      <p>We received a request to reset your password. Click the link below to reset it:</p>
+      <a href="${reset}" target="_blank">Reset Password</a>
+      <p>If you didn't request this, please ignore this email.</p>
+    `,
+    text: `Hello, ${username}!\n\nWe received a request to reset your password. Click the link below to reset it:\n${reset}\n\nIf you didn't request this, please ignore this email.`,
+  };
+
+  const info = await transport.sendMail(message);
+
+  console.log(`📨 Email sent: ${info.messageId}`);
+
   console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
 }

@@ -9,7 +9,7 @@ import usersRouter from "./routes/users.js";
 import videosRouter from "./routes/videos.js";
 import playlistsRouter from "./routes/playlists.js";
 import gifsRouter from "./routes/gifs.js";
-import loginRouter from "./routes/login.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 
@@ -35,7 +35,7 @@ app.use("/users", usersRouter);
 app.use("/videos", videosRouter);
 app.use("/playlists", playlistsRouter);
 app.use("/gifs", gifsRouter);
-app.use("/login", loginRouter);
+app.use("/auth", authRouter);
 
 // --- Health Check ---
 app.get("/", (req, res) => {
@@ -45,6 +45,5 @@ app.get("/", (req, res) => {
 // --- START SERVER ---
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  const url = isProduction ? `https://api.idle.fm` : `http://localhost:${PORT}`;
-  console.log(`✅ API running on ${url}`);
+  console.log(`✅ API running on ${process.env.BACKEND_URL}`);
 });

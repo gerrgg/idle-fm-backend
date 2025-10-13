@@ -1,0 +1,6 @@
+CREATE TABLE PasswordResets (
+  id INT IDENTITY PRIMARY KEY,
+  user_id INT NOT NULL,
+  token NVARCHAR(255) NOT NULL,
+  expires_at DATETIME NOT NULL
+);

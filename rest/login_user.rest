@@ -1,7 +1,7 @@
-POST http://localhost:8080/login
+POST http://localhost:8080/auth/login
 Content-Type: application/json
 
 {
   "email": "active@user.com",
-  "password": "password"
+  "password": "newSecurePassword123"
 }
