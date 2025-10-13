@@ -4,15 +4,9 @@ import sql from "mssql";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import {
-  generateActivationToken,
-  updateUserActivationHash,
-} from "../utils/userHelper.js";
+import { createActivation } from "../utils/createActivation.js";
 
-import {
-  sendActivationEmail,
-  sendPasswordResetEmail,
-} from "../utils/mailer.js";
+import { sendPasswordResetEmail } from "../utils/mailer.js";
 
 const router = express.Router();
 
@@ -32,46 +26,34 @@ router.post(
     }
 
     // Check if the password matches
-    bcrypt.compare(password, user.password_hash, (err, isMatch) => {
-      if (err) {
-        console.error("❌ Password comparison error:", err);
-        return res.status(500).json({ error: "Internal server error" });
-      }
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
 
-      if (!isMatch) {
-        return res.status(401).json({ error: "Invalid email or password" });
-      }
-
-      // check if the user is activated
-      if (!user.activated_at) {
-        const token = generateActivationToken();
-        updateUserActivationHash(user.id, token);
-
-        const activationUrl = `${process.env.BACKEND_URL}/users/activate?token=${token}&uid=${user.id}`;
-        sendActivationEmail(user.email, user.username, activationUrl);
-
-        return res
-          .status(403)
-          .json({ error: "Account not activated, please check email." });
-      }
-
-      const token = jwt.sign(
-        { id: user.id, email: user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
-
-      res.cookie("token", token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+    if (!user.is_active) {
+      await createActivation(user); // reuse same logic
+      return res.status(403).json({
+        status: "inactive",
+        message:
+          "Your account is not yet activated. A new activation link has been sent to your email.",
       });
+    }
 
-      res.json({
-        message: "Login successful",
-      });
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
+
+    res.json({ message: "Login successful" });
   })
 );
 
@@ -112,7 +94,7 @@ router.post(
       ]
     );
 
-    const resetUrl = `${process.env.BACKEND_URL}/auth/reset-password?token=${resetToken}&uid=${user.id}`;
+    const resetUrl = `${process.env.BACKEND_URL}/auth/reset-password?token=${resetToken}`;
 
     await sendPasswordResetEmail(email, user.username, resetUrl);
 
@@ -123,9 +105,9 @@ router.post(
 router.post(
   "/reset-password",
   asyncHandler(async (req, res) => {
-    const { token, uid, newPassword } = req.body;
+    const { token, newPassword } = req.body;
 
-    if (!token || !uid || !newPassword) {
+    if (!token || !newPassword) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -134,11 +116,8 @@ router.post(
 
     // Check if the reset token is valid
     const rows = await queryDB(
-      "SELECT * FROM PasswordResets WHERE user_id = @user_id AND token = @token",
-      [
-        ["user_id", uid, sql.Int],
-        ["token", hashedToken, sql.NVarChar],
-      ]
+      "SELECT * FROM PasswordResets WHERE token = @token",
+      [["token", hashedToken, sql.NVarChar]]
     );
 
     const resetEntry = rows[0];
@@ -155,7 +134,7 @@ router.post(
       "UPDATE Users SET password_hash = @password_hash WHERE id = @user_id",
       [
         ["password_hash", passwordHash, sql.NVarChar],
-        ["user_id", uid, sql.Int],
+        ["user_id", resetEntry.user_id, sql.Int],
       ]
     );
 

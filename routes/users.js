@@ -30,7 +30,6 @@ router.post(
   asyncHandler(async (req, res) => {
     const { username, email, password, confirmPassword } = req.body;
 
-    // --- Basic validation ---
     if (!username || !email || !password || !confirmPassword) {
       return res.status(400).json({ error: "All fields are required" });
     }
@@ -59,99 +58,44 @@ router.post(
     // --- Hash password + create activation token ---
     const passwordHash = await bcrypt.hash(password, 10);
 
+    // --- Insert user ---
+    const result = await queryDB(
+      `
+      INSERT INTO Users (username, email, password_hash)
+      OUTPUT INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.created_at
+      VALUES (@username, @email, @password_hash)
+      `,
+      [
+        ["username", username, sql.NVarChar],
+        ["email", email, sql.NVarChar],
+        ["password_hash", passwordHash, sql.NVarChar],
+      ]
+    );
+
+    const user = result[0];
+
+    // --- Insert activation token ---
     const activationToken = crypto.randomBytes(32).toString("hex");
     const activationHash = crypto
       .createHash("sha256")
       .update(activationToken)
       .digest("hex");
 
-    // --- Insert user ---
-    const result = await queryDB(
-      `
-      INSERT INTO Users (username, email, password_hash, activation_hash)
-      OUTPUT INSERTED.id, INSERTED.username, INSERTED.email, INSERTED.created_at, INSERTED.activation_expires
-      VALUES (@username, @email, @password_hash, @activation_hash)
-      `,
+    await queryDB(
+      `INSERT INTO Activations (user_id, token) VALUES (@userId, @token)`,
       [
-        ["username", username, sql.NVarChar],
-        ["email", email, sql.NVarChar],
-        ["password_hash", passwordHash, sql.NVarChar],
-        ["activation_hash", activationHash, sql.NVarChar],
+        ["userId", user.id, sql.Int],
+        ["token", activationHash, sql.NVarChar],
       ]
     );
 
-    const user = result[0];
-
-    const activationUrl = `${process.env.BACKEND_URL}/activate?token=${activationToken}&uid=${user.id}`;
+    const activationUrl = `${process.env.FRONTEND_URL}/activate?token=${activationToken}`;
     await sendActivationEmail(email, username, activationUrl);
 
     res.status(201).json({
       message:
-        "User created. Please check your email to activate your account.",
-      user,
+        "Account created. Please check your email to activate your account.",
     });
-  })
-);
-
-/**
- * GET /users/activate
- * Activate user account
- */
-router.get(
-  "/activate",
-  asyncHandler(async (req, res) => {
-    const { token, uid } = req.query;
-
-    console.log("Activation request:", { token, uid });
-
-    if (!token || !uid)
-      return res.status(400).json({ error: "Missing token or user ID" });
-
-    // Hash the token for comparison
-    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
-
-    // Get the user by ID
-    const rows = await queryDB(
-      `
-      SELECT id, username, email, activated_at, activation_hash, activation_expires
-      FROM Users
-      WHERE id = @uid
-    `,
-      [["uid", uid, sql.Int]]
-    );
-
-    const user = rows[0];
-    const now = new Date();
-    const expiry = new Date(user.activation_expires);
-
-    if (user.activated_at) {
-      return res.json({
-        status: "already",
-        message: "Account already active",
-        user,
-      });
-    }
-
-    console.log(
-      hashedToken,
-      user.activation_hash,
-      user.activation_hash === hashedToken
-    );
-
-    if (user.activation_hash === hashedToken && expiry > now) {
-      await queryDB(
-        `UPDATE Users
-        SET activated_at = SYSDATETIMEOFFSET(), activation_hash = NULL
-        WHERE id = @id`,
-        [["id", user.id, sql.Int]]
-      );
-      return res.json({
-        status: "success",
-        message: "Account activated",
-        user,
-      });
-    }
-    return res.json({ status: "invalid", message: "Invalid or expired token" });
   })
 );
 
@@ -179,7 +123,7 @@ router.get(
     const userId = req.user.id;
     const rows = await queryDB(
       `
-      SELECT id, username, email, created_at, activated_at
+      SELECT id, username, email
       FROM Users
       WHERE id = @id
     `,

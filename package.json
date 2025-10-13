@@ -7,6 +7,7 @@
     "prod": "NODE_ENV=production node server.js",
     "migrate": "NODE_ENV=development node migrate.js",
     "migrate:prod": "NODE_ENV=production node migrate.js",
+    "migrate:reset": "NODE_ENV=development node migrate.js --reset",
     "seed": "NODE_ENV=development node seed.js",
     "seed:prod": "NODE_ENV=production node seed.js",
     "lint": "eslint .",

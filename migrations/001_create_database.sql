@@ -4,10 +4,21 @@ CREATE TABLE Users (
   username NVARCHAR(255) NOT NULL,
   email NVARCHAR(255) NOT NULL UNIQUE,
   password_hash NVARCHAR(255) NOT NULL,
-  activation_hash NVARCHAR(255) NULL,
-  activation_expires DATETIMEOFFSET DEFAULT DATEADD(HOUR, 24, SYSDATETIMEOFFSET()),
-  activated_at DATETIMEOFFSET NULL,
+  is_active BIT NOT NULL DEFAULT 0,
   created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+);
+
+-- ACTIVATIONS
+CREATE TABLE Activations (
+  id INT IDENTITY(1,1) PRIMARY KEY,
+  user_id INT NOT NULL,
+  token NVARCHAR(255) NOT NULL,
+  expires_at DATETIMEOFFSET NOT NULL DEFAULT DATEADD(HOUR, 24, SYSDATETIMEOFFSET()),
+  activated_at DATETIMEOFFSET NULL,
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+  CONSTRAINT FK_Activations_Users FOREIGN KEY (user_id)
+    REFERENCES Users(id)
+    ON DELETE CASCADE
 );
 
 -- PLAYLISTS
@@ -20,7 +31,9 @@ CREATE TABLE Playlists (
   likes INT DEFAULT 0,
   shares INT DEFAULT 0,
   is_public BIT DEFAULT 1,
-  FOREIGN KEY (user_id) REFERENCES Users(id) ON DELETE CASCADE
+  CONSTRAINT FK_Playlists_Users FOREIGN KEY (user_id)
+    REFERENCES Users(id)
+    ON DELETE CASCADE
 );
 
 -- VIDEOS
@@ -51,9 +64,15 @@ CREATE TABLE PlaylistVideos (
   position INT,
   added_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
   PRIMARY KEY (playlist_id, video_id),
-  FOREIGN KEY (playlist_id) REFERENCES Playlists(id) ON DELETE CASCADE,
-  FOREIGN KEY (video_id) REFERENCES Videos(id) ON DELETE CASCADE,
-  FOREIGN KEY (gif_id) REFERENCES Gifs(id) ON DELETE SET NULL
+  CONSTRAINT FK_PlaylistVideos_Playlists FOREIGN KEY (playlist_id)
+    REFERENCES Playlists(id)
+    ON DELETE CASCADE,
+  CONSTRAINT FK_PlaylistVideos_Videos FOREIGN KEY (video_id)
+    REFERENCES Videos(id)
+    ON DELETE CASCADE,
+  CONSTRAINT FK_PlaylistVideos_Gifs FOREIGN KEY (gif_id)
+    REFERENCES Gifs(id)
+    ON DELETE SET NULL
 );
 
 CREATE INDEX idx_playlistvideos_position ON PlaylistVideos(playlist_id, position);

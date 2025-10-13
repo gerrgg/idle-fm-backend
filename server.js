@@ -10,6 +10,7 @@ import videosRouter from "./routes/videos.js";
 import playlistsRouter from "./routes/playlists.js";
 import gifsRouter from "./routes/gifs.js";
 import authRouter from "./routes/auth.js";
+import activationsRouter from "./routes/activations.js";
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.use("/videos", videosRouter);
 app.use("/playlists", playlistsRouter);
 app.use("/gifs", gifsRouter);
 app.use("/auth", authRouter);
+app.use("/activate", activationsRouter);
 
 // --- Health Check ---
 app.get("/", (req, res) => {

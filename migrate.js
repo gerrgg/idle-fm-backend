@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getPool } from "./db.js";
+import sql from "mssql";
 
 const migrationsDir = path.resolve("./migrations");
 const dbName = process.env.MSSQL_DATABASE;
@@ -93,17 +94,23 @@ async function rollbackLast(pool) {
 
 async function resetDatabase() {
   console.log(`⚠️ Resetting database: ${dbName}`);
+
   const adminPool = await sql.connect({
-    server: process.env.MSSQL_SERVER,
     user: process.env.MSSQL_USER,
     password: process.env.MSSQL_PASSWORD,
-    options: { encrypt: true, trustServerCertificate: false },
+    server: process.env.MSSQL_SERVER,
+    database: "master", // critical: connect to master, not target DB
+    options: { encrypt: true, trustServerCertificate: true },
   });
 
   await adminPool.request().query(`
     IF EXISTS (SELECT * FROM sys.databases WHERE name = '${dbName}')
+    BEGIN
+      ALTER DATABASE [${dbName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
       DROP DATABASE [${dbName}];
+    END;
   `);
+
   await adminPool.request().query(`CREATE DATABASE [${dbName}];`);
   console.log(`✅ Database ${dbName} recreated.`);
   await adminPool.close();
