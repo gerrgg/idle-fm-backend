@@ -81,12 +81,7 @@ router.post(
 
     const user = result[0];
 
-    const baseUrl =
-      process.env.NODE_ENV === "production"
-        ? "https://idle.fm"
-        : "http://localhost:5173";
-
-    const activationUrl = `${baseUrl}/activate?token=${activationToken}&uid=${user.id}`;
+    const activationUrl = `${process.env.BACKEND_URL}/activate?token=${activationToken}&uid=${user.id}`;
     await sendActivationEmail(email, username, activationUrl);
 
     res.status(201).json({
@@ -96,12 +91,18 @@ router.post(
     });
   })
 );
+
+/**
+ * GET /users/activate
+ * Activate user account
+ */
 router.get(
   "/activate",
   asyncHandler(async (req, res) => {
     const { token, uid } = req.query;
 
-    console.log("Activation request:", req.query, { token, uid });
+    console.log("Activation request:", { token, uid });
+
     if (!token || !uid)
       return res.status(400).json({ error: "Missing token or user ID" });
 
@@ -118,9 +119,6 @@ router.get(
       [["uid", uid, sql.Int]]
     );
 
-    if (!rows.length)
-      return res.redirect(`${process.env.BASE_URL}/activate?status=invalid`);
-
     const user = rows[0];
     const now = new Date();
     const expiry = new Date(user.activation_expires);
@@ -132,6 +130,13 @@ router.get(
         user,
       });
     }
+
+    console.log(
+      hashedToken,
+      user.activation_hash,
+      user.activation_hash === hashedToken
+    );
+
     if (user.activation_hash === hashedToken && expiry > now) {
       await queryDB(
         `UPDATE Users
