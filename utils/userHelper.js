@@ -20,6 +20,7 @@ export const updateUserActivationHash = async (userId, token) => {
     SET activation_hash = @hash, activation_expires = DATEADD(HOUR, 24, SYSDATETIMEOFFSET())
     WHERE id = @userId
   `;
+
   await queryDB(query, [
     ["hash", hash, sql.VarChar],
     ["userId", userId, sql.Int],

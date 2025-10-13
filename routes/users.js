@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import sql from "mssql";
 import crypto from "crypto";
 import { sendActivationEmail } from "../utils/mailer.js";
+import { auth } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -151,6 +152,45 @@ router.get(
       });
     }
     return res.json({ status: "invalid", message: "Invalid or expired token" });
+  })
+);
+
+/**
+ * Test cookie based authentication
+ * This is just for testing purposes and should not be used in production.
+ */
+router.get(
+  "/test-auth",
+  auth,
+  asyncHandler(async (req, res) => {
+    res.json({ message: "Authenticated", user: req.user });
+  })
+);
+
+/**
+ * GET /users/profile
+ * Get the authenticated user's profile
+ * Requires authentication via the auth middleware
+ */
+router.get(
+  "/profile",
+  auth,
+  asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+    const rows = await queryDB(
+      `
+      SELECT id, username, email, created_at, activated_at
+      FROM Users
+      WHERE id = @id
+    `,
+      [["id", userId, sql.Int]]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json(rows[0]);
   })
 );
 

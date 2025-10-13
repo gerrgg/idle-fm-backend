@@ -2,6 +2,7 @@ import express from "express";
 import { queryDB, asyncHandler } from "../utils/dbHelpers.js";
 import sql from "mssql";
 import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import {
   generateActivationToken,
   updateUserActivationHash,
@@ -50,8 +51,22 @@ router.post(
           .json({ error: "Account not activated, please check email." });
       }
 
-      const { password_hash, ...userData } = user;
-      res.json(userData);
+      const token = jwt.sign(
+        { id: user.id, email: user.email },
+        process.env.JWT_SECRET,
+        { expiresIn: "7d" }
+      );
+
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      });
+
+      res.json({
+        message: "Login successful",
+      });
     });
   })
 );
