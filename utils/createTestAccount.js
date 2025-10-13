@@ -1,9 +1,10 @@
 import nodemailer from "nodemailer";
+import { logger } from "./logger.js";
 
 async function createTestAccount() {
   const testAccount = await nodemailer.createTestAccount();
-  console.log("✅ Test account created:");
-  console.log(testAccount);
+  logger.info("✅ Test account created:");
+  logger.info(testAccount);
 }
 
 createTestAccount();

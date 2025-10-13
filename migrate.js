@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { getPool } from "./db.js";
 import sql from "mssql";
+import { logger } from "./utils/logger.js";
 
 const migrationsDir = path.resolve("./migrations");
 const dbName = process.env.MSSQL_DATABASE;
@@ -39,7 +40,7 @@ async function runSqlFile(pool, filePath) {
     try {
       await pool.request().batch(statement);
     } catch (err) {
-      console.error(`❌ Error running statement in ${filePath}:`, err.message);
+      logger.error(`❌ Error running statement in ${filePath}:`, err.message);
       throw err;
     }
   }
@@ -55,20 +56,20 @@ async function applyMigrations(pool) {
 
   for (const file of files) {
     if (applied.has(file)) continue;
-    console.log(`🟢 Running migration: ${file}`);
+    logger.info(`🟢 Running migration: ${file}`);
     await runSqlFile(pool, path.join(migrationsDir, file));
     await pool
       .request()
       .input("name", file)
       .query("INSERT INTO __migrations (name) VALUES (@name)");
   }
-  console.log("✅ All migrations applied.");
+  logger.info("✅ All migrations applied.");
 }
 
 async function rollbackLast(pool) {
   const applied = await listApplied(pool);
   if (applied.length === 0) {
-    console.log("⚠️ No migrations to rollback.");
+    logger.info("⚠️ No migrations to rollback.");
     return;
   }
 
@@ -79,21 +80,21 @@ async function rollbackLast(pool) {
   );
 
   if (!fs.existsSync(rollbackFile)) {
-    console.log(`⚠️ No rollback file found for ${last} (${rollbackFile})`);
+    logger.info(`⚠️ No rollback file found for ${last} (${rollbackFile})`);
     return;
   }
 
-  console.log(`⏪ Rolling back migration: ${last}`);
+  logger.info(`⏪ Rolling back migration: ${last}`);
   await runSqlFile(pool, rollbackFile);
   await pool
     .request()
     .input("name", last)
     .query("DELETE FROM __migrations WHERE name=@name");
-  console.log("✅ Rollback complete.");
+  logger.info("✅ Rollback complete.");
 }
 
 async function resetDatabase() {
-  console.log(`⚠️ Resetting database: ${dbName}`);
+  logger.info(`⚠️ Resetting database: ${dbName}`);
 
   const adminPool = await sql.connect({
     user: process.env.MSSQL_USER,
@@ -112,7 +113,7 @@ async function resetDatabase() {
   `);
 
   await adminPool.request().query(`CREATE DATABASE [${dbName}];`);
-  console.log(`✅ Database ${dbName} recreated.`);
+  logger.info(`✅ Database ${dbName} recreated.`);
   await adminPool.close();
 }
 
@@ -123,7 +124,7 @@ async function run() {
   const rollback = args.includes("--rollback");
 
   if (reset && process.env.NODE_ENV !== "development") {
-    console.error("❌ --reset is only allowed in development.");
+    logger.error("❌ --reset is only allowed in development.");
     process.exit(1);
   }
 
@@ -139,6 +140,6 @@ async function run() {
 }
 
 run().catch((err) => {
-  console.error("❌ Migration error:", err);
+  logger.error("❌ Migration error:", err);
   process.exit(1);
 });

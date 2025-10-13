@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { getPool } from "./db.js";
+import { logger } from "./utils/logger.js";
 
 const seedsDir = path.resolve("./seeds");
 
@@ -11,7 +12,7 @@ async function runSeedFiles(pool) {
     .sort();
 
   for (const file of files) {
-    console.log(`🌱 Running seed: ${file}`);
+    logger.info(`🌱 Running seed: ${file}`);
     const sqlText = fs.readFileSync(path.join(seedsDir, file), "utf8");
     const statements = sqlText
       .split(/^\s*GO\s*$/gim)
@@ -23,7 +24,7 @@ async function runSeedFiles(pool) {
     }
   }
 
-  console.log("✅ Seeding complete.");
+  logger.info("✅ Seeding complete.");
 }
 
 async function run() {
@@ -32,7 +33,7 @@ async function run() {
     await runSeedFiles(pool);
     await pool.close();
   } catch (err) {
-    console.error("❌ Seeding error:", err);
+    logger.error("❌ Seeding error:", err);
     process.exit(1);
   }
 }

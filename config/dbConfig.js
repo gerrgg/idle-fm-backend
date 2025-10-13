@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import { logger } from "../utils/logger.js";
 
 const envFile =
   process.env.NODE_ENV === "production"
@@ -7,7 +8,7 @@ const envFile =
 
 dotenv.config({ path: envFile });
 
-console.log(`🌎 Loaded environment from ${envFile}`);
+logger.info(`🌎 Loaded environment from ${envFile}`);
 
 export const dbConfig = {
   server: process.env.MSSQL_SERVER,

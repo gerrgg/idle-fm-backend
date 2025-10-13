@@ -1,5 +1,6 @@
 // utils/dbHelpers.js
 import { getPool } from "../db.js";
+import { logger } from "./logger.js";
 
 /**
  * Execute a SQL query safely with automatic connection management + error handling.
@@ -18,7 +19,7 @@ export async function queryDB(query, params = []) {
     const result = await request.query(query);
     return result.recordset;
   } catch (err) {
-    console.error("❌ SQL Error:", err);
+    logger.error("❌ SQL Error:", err);
     throw new Error(err.message);
   }
 }
@@ -30,7 +31,7 @@ export async function queryDB(query, params = []) {
 export function asyncHandler(fn) {
   return function (req, res, next) {
     Promise.resolve(fn(req, res, next)).catch((err) => {
-      console.error("❌ Route Error:", err);
+      logger.error("❌ Route Error:", err);
       res.status(500).json({ error: "Database error", details: err.message });
     });
   };

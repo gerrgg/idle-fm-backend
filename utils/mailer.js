@@ -1,27 +1,26 @@
 import nodemailer from "nodemailer";
+import { logger } from "./logger.js";
 
 let transporter;
 
-// 🧱 Setup transporter (reuses one if already created)
 async function getTransporter() {
   if (transporter) return transporter;
 
-  // Try using your env vars first
   const user = process.env.ETHEREAL_USER;
   const pass = process.env.ETHEREAL_PASS;
 
   if (user && pass) {
-    console.log("📧 Using Ethereal credentials from .env");
+    logger.info("📧 Using Ethereal credentials from .env");
     transporter = nodemailer.createTransport({
       host: "smtp.ethereal.email",
       port: 587,
       auth: { user, pass },
     });
   } else {
-    console.log("⚙️ Creating new Ethereal test account...");
+    logger.info("⚙️ Creating new Ethereal test account...");
     const testAccount = await nodemailer.createTestAccount();
-    console.log("✅ Test account created:");
-    console.log(testAccount);
+    logger.info("✅ Test account created:");
+    logger.info(testAccount);
 
     transporter = nodemailer.createTransport({
       host: "smtp.ethereal.email",
@@ -54,9 +53,9 @@ export async function sendActivationEmail(to, username, activationUrl) {
 
   const info = await transport.sendMail(message);
 
-  console.log(`📨 Email sent: ${info.messageId}`);
+  logger.info(`📨 Email sent: ${info.messageId}`);
 
-  console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+  logger.info(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
 }
 
 // ✉️ Send password reset email
@@ -77,7 +76,7 @@ export async function sendPasswordResetEmail(to, username, reset) {
 
   const info = await transport.sendMail(message);
 
-  console.log(`📨 Email sent: ${info.messageId}`);
+  logger.info(`📨 Email sent: ${info.messageId}`);
 
-  console.log(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
+  logger.info(`🔗 Preview URL: ${nodemailer.getTestMessageUrl(info)}`);
 }

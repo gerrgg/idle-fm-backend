@@ -23,10 +23,13 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "mssql": "^12.0.0",
-    "nodemailer": "^7.0.9"
+    "nodemailer": "^7.0.9",
+    "winston": "^3.18.3"
   },
   "type": "module",
   "devDependencies": {
