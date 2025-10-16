@@ -32,7 +32,7 @@ const authLimiter = rateLimit({
 // --- CORS ---
 const allowedOrigins = isProduction
   ? ["https://idle.fm", "https://www.idle.fm"]
-  : ["http://localhost:5173", "http://localhost:8080"];
+  : ["http://localhost:5173"];
 
 app.use(
   helmet({
@@ -67,7 +67,15 @@ app.use(express.json({ limit: "1mb" }));
 
 app.use(cookieParser());
 
-app.use("/auth", authLimiter, authRouter);
+app.use(
+  "/auth",
+  (req, res, next) => {
+    if (req.path === "/me") return next();
+    return authLimiter(req, res, next);
+  },
+  authRouter
+);
+
 app.use("/users", usersRouter);
 app.use("/videos", videosRouter);
 app.use("/playlists", playlistsRouter);

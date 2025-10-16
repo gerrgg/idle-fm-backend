@@ -5,11 +5,16 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { createActivation } from "../utils/createActivation.js";
-
+import { auth } from "../middleware/auth.js";
+import { isProduction } from "../config/dbConfig.js";
 import { sendPasswordResetEmail } from "../utils/mailer.js";
 
 const router = express.Router();
 
+/**
+ * POST /auth/login
+ * Authenticates user with email and password
+ */
 router.post(
   "/login",
   asyncHandler(async (req, res) => {
@@ -48,15 +53,20 @@ router.post(
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
-      sameSite: "none",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: isProduction,
+      sameSite: isProduction ? "none" : "lax",
+      path: "/",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.json({ message: "Login successful" });
   })
 );
 
+/**
+ * POST /auth/request-password-reset
+ * Sends a password reset link to the user's email if it exists
+ */
 router.post(
   "/request-password-reset",
   asyncHandler(async (req, res) => {
@@ -102,6 +112,10 @@ router.post(
   })
 );
 
+/**
+ * POST /auth/reset-password
+ * Resets the user's password using a valid reset token
+ */
 router.post(
   "/reset-password",
   asyncHandler(async (req, res) => {
@@ -144,6 +158,46 @@ router.post(
     ]);
 
     res.json({ message: "Password reset successful" });
+  })
+);
+
+/**
+ * GET /auth/me
+ * Returns the authenticated user's minimal info
+ * Requires valid token cookie
+ */
+router.get(
+  "/me",
+  auth,
+  asyncHandler(async (req, res) => {
+    const userId = req.user.id;
+
+    const rows = await queryDB(
+      `
+      SELECT id, username, email, is_active
+      FROM Users
+      WHERE id = @id
+    `,
+      [["id", userId, sql.Int]]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user: rows[0] });
+  })
+);
+
+router.post(
+  "/logout",
+  asyncHandler(async (req, res) => {
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+    });
+    res.json({ message: "Logout successful" });
   })
 );
 

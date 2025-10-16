@@ -28,14 +28,10 @@ router.get(
 router.post(
   "/",
   asyncHandler(async (req, res) => {
-    const { username, email, password, confirmPassword } = req.body;
+    const { username, email, password } = req.body;
 
-    if (!username || !email || !password || !confirmPassword) {
+    if (!username || !email || !password) {
       return res.status(400).json({ error: "All fields are required" });
-    }
-
-    if (password !== confirmPassword) {
-      return res.status(400).json({ error: "Passwords do not match" });
     }
 
     // password should be atleast 8 characters long
@@ -89,7 +85,7 @@ router.post(
       ]
     );
 
-    const activationUrl = `${process.env.FRONTEND_URL}/activate?token=${activationToken}`;
+    const activationUrl = `${process.env.BACKEND_URL}/activate?token=${activationToken}&redirect=true`;
     await sendActivationEmail(email, username, activationUrl);
 
     res.status(201).json({
@@ -108,33 +104,6 @@ router.get(
   auth,
   asyncHandler(async (req, res) => {
     res.json({ message: "Authenticated", user: req.user });
-  })
-);
-
-/**
- * GET /users/profile
- * Get the authenticated user's profile
- * Requires authentication via the auth middleware
- */
-router.get(
-  "/profile",
-  auth,
-  asyncHandler(async (req, res) => {
-    const userId = req.user.id;
-    const rows = await queryDB(
-      `
-      SELECT id, username, email
-      FROM Users
-      WHERE id = @id
-    `,
-      [["id", userId, sql.Int]]
-    );
-
-    if (rows.length === 0) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    res.json(rows[0]);
   })
 );
 

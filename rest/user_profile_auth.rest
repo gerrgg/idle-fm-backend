@@ -1,3 +1,3 @@
-GET http://localhost:8080/users/profile
+GET http://localhost:8080/auth/me
 Content-Type: application/json
-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhY3RpdmUzQHVzZXIuY29tIiwiaWF0IjoxNzYwMzYyMjQ1LCJleHAiOjE3NjA5NjcwNDV9.GuBwrsyzrd9JVlxcT6PEWHOTjKtqTopk2uwxRxD9rdY
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNDgwMjAxLCJleHAiOjE3NjEwODUwMDF9.sPeTcMdN3pRYHBOJwFJHlKFAs6iUlhX4p14GA9_82R8

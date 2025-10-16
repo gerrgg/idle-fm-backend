@@ -22,7 +22,7 @@ export async function createActivation(user) {
     ]
   );
 
-  const activationUrl = `${process.env.FRONTEND_URL}/activate?token=${token}`;
+  const activationUrl = `${process.env.BACKEND_URL}/activate?token=${token}&redirect=true`;
   await sendActivationEmail(user.email, user.username, activationUrl);
 
   return activationUrl;

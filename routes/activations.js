@@ -9,7 +9,7 @@ const router = express.Router();
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const { token } = req.query;
+    const { token, redirect } = req.query;
     if (!token) return res.status(400).json({ error: "Missing token" });
 
     const hashed = crypto.createHash("sha256").update(token).digest("hex");
@@ -26,21 +26,27 @@ router.get(
     );
 
     const record = rows[0];
-    if (!record)
-      return res.json({
-        status: "invalid",
-        message: "Invalid activation link",
-      });
+    if (!record) {
+      const payload = { status: "invalid", message: "Invalid activation link" };
+      return redirect
+        ? res.redirect(`${process.env.FRONTEND_URL}/login?status=invalid`)
+        : res.json(payload);
+    }
 
-    if (record.is_active || record.activated_at)
-      return res.json({ status: "already", message: "Account already active" });
+    if (record.is_active || record.activated_at) {
+      const payload = { status: "already", message: "Account already active" };
+      return redirect
+        ? res.redirect(`${process.env.FRONTEND_URL}/login?status=already`)
+        : res.json(payload);
+    }
 
-    const now = new Date(record.expires_at);
-    if (now < new Date())
-      return res.json({
-        status: "invalid",
-        message: "Activation link expired",
-      });
+    const expired = new Date(record.expires_at) < new Date();
+    if (expired) {
+      const payload = { status: "invalid", message: "Activation link expired" };
+      return redirect
+        ? res.redirect(`${process.env.FRONTEND_URL}/login?status=expired`)
+        : res.json(payload);
+    }
 
     await queryDB(
       `
@@ -53,7 +59,10 @@ router.get(
       ]
     );
 
-    res.json({ status: "success", message: "Account activated" });
+    const payload = { status: "success", message: "Account activated" };
+    return redirect
+      ? res.redirect(`${process.env.FRONTEND_URL}/login?status=success`)
+      : res.json(payload);
   })
 );
 

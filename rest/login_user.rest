@@ -2,6 +2,6 @@ POST http://localhost:8080/auth/login
 Content-Type: application/json
 
 {
-  "email": "active3@user.com",
-  "password": "newSecurePassword123"
+  "email": "admin@idle.fm",
+  "password": "password"
 }
