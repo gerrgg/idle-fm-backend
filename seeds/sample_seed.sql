@@ -1,10 +1,16 @@
--- USERS (mock)
-INSERT INTO Users (username, email, password_hash, activation_hash, activated_at)
+-- USERS
+INSERT INTO Users (username, email, password_hash, is_active)
 VALUES
-('greg', 'greg@example.com', 'hash1', 'a1', SYSDATETIMEOFFSET()),
-('guest', 'guest@example.com', 'hash2', 'a2', SYSDATETIMEOFFSET());
+('greg', 'greg@example.com', 'hash1', 1),
+('guest', 'guest@example.com', 'hash2', 1);
 
--- PLAYLISTS (mock)
+-- ACTIVATIONS
+INSERT INTO Activations (user_id, token, activated_at)
+VALUES
+(1, 'a1', SYSDATETIMEOFFSET()),
+(2, 'a2', SYSDATETIMEOFFSET());
+
+-- PLAYLISTS
 INSERT INTO Playlists (user_id, title, views, likes, shares, is_public)
 VALUES
 (1, 'Idle.fm Starter Mix', 150, 20, 5, 1),
