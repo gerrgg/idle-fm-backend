@@ -1,6 +1,6 @@
-POST http://localhost:8080/playlists/1002/videos
+POST http://localhost:8080/playlists/3/videos
 Content-Type: application/json
-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNjkwOTA0LCJleHAiOjE3NjEyOTU3MDR9.0eVQXWsdwcM0KT6IdrBG8oxRB7UERJ0xUhQ11RRuNsE
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNzI2MjkxLCJleHAiOjE3NjEzMzEwOTF9.ulN-4U65KQ4GcoKU5hHipA5tR3EFL7N15olISS3Ctsc
 
 {
   "youtube_key": "4uaPrB00eEc",

@@ -2,6 +2,7 @@ import express from "express";
 import sql from "mssql";
 import { queryDB, asyncHandler } from "../utils/dbHelpers.js";
 import { auth } from "../middleware/auth.js";
+import { generateUniqueTitle } from "../utils/playlistHelpers.js";
 
 const router = express.Router();
 
@@ -63,35 +64,88 @@ router.get(
   })
 );
 
-router.post('/',
+router.post(
+  "/",
   auth,
   asyncHandler(async (req, res) => {
-    const { title } = req.body;
-    if (!title) {
-      return res.status(400).json({ error: "Title is required" });
-    }
+    const { title, description = null, is_public = true, tags = [] } = req.body;
 
-    const result = await queryDB(
+    if (!title) return res.status(400).json({ error: "Title is required" });
+
+    const titleUnique = await generateUniqueTitle(req.user.id, title);
+
+    // 1. Insert playlist
+    const playlistResult = await queryDB(
       `
-      INSERT INTO Playlists (title, user_id)
-      OUTPUT INSERTED.id, INSERTED.title, INSERTED.created_at
-      VALUES (@title, @userId)
+      INSERT INTO Playlists (title, description, is_public, user_id)
+      OUTPUT INSERTED.id, INSERTED.title, INSERTED.description, INSERTED.is_public, INSERTED.created_at
+      VALUES (@titleUnique, @description, @is_public, @userId)
       `,
       [
-        ["title", title, sql.NVarChar],
+        ["titleUnique", titleUnique, sql.NVarChar],
+        ["description", description, sql.NVarChar],
+        ["is_public", is_public, sql.Bit],
         ["userId", req.user.id, sql.Int],
       ]
     );
 
-    res.status(201).json(result[0]);
+    const playlist = playlistResult[0];
+
+    // 2. Handle tags if provided
+    if (tags.length > 0) {
+      for (const tagName of tags) {
+        const lowerTagName = tagName.trim().toLowerCase();
+
+        const tagLookup = await queryDB(
+          `SELECT id FROM Tags WHERE name = @lowerTagName`,
+          [["lowerTagName", lowerTagName, sql.NVarChar]]
+        );
+
+        let tagId;
+
+        if (tagLookup.length > 0) {
+          tagId = tagLookup[0].id;
+        } else {
+          const insertTag = await queryDB(
+            `INSERT INTO Tags (name) OUTPUT INSERTED.id VALUES (@lowerTagName)`,
+            [["lowerTagName", lowerTagName, sql.NVarChar]]
+          );
+          tagId = insertTag[0].id;
+        }
+
+        await queryDB(
+          `INSERT INTO PlaylistTags (playlist_id, tag_id)
+     VALUES (@playlistId, @tagId)`,
+          [
+            ["playlistId", playlist.id, sql.Int],
+            ["tagId", tagId, sql.Int],
+          ]
+        );
+      }
+    }
+
+    res.status(201).json({
+      ...playlist,
+      tags,
+    });
   })
 );
 
-router.post("/:id/videos",
+router.get(
+  "/tags",
+  asyncHandler(async (req, res) => {
+    const tags = await queryDB("SELECT * FROM Tags");
+    res.json(tags);
+  })
+);
+
+router.post(
+  "/:id/videos",
   auth,
   asyncHandler(async (req, res) => {
     const playlistId = Number(req.params.id);
-    if (isNaN(playlistId)) return res.status(400).json({ error: "Invalid playlist ID" });
+    if (isNaN(playlistId))
+      return res.status(400).json({ error: "Invalid playlist ID" });
 
     const ownerId = req.user.id;
     const { youtube_key, title, tenor_key, gif_title, position } = req.body;
@@ -104,8 +158,10 @@ router.post("/:id/videos",
       "SELECT id, user_id FROM Playlists WHERE id = @PlaylistId",
       [["PlaylistId", playlistId, sql.Int]]
     );
-    if (!playlist.length) return res.status(404).json({ error: "Playlist not found" });
-    if (playlist[0].user_id !== ownerId) return res.status(403).json({ error: "Forbidden" });
+    if (!playlist.length)
+      return res.status(404).json({ error: "Playlist not found" });
+    if (playlist[0].user_id !== ownerId)
+      return res.status(403).json({ error: "Forbidden" });
 
     // --- VIDEO: find or create ---
     let videoId;
@@ -155,7 +211,12 @@ router.post("/:id/videos",
 
     // --- Determine position if not provided ---
     let finalPosition;
-    if (position === undefined || position === null || position === "" || Number(position) <= 0) {
+    if (
+      position === undefined ||
+      position === null ||
+      position === "" ||
+      Number(position) <= 0
+    ) {
       const last = await queryDB(
         "SELECT ISNULL(MAX(position), 0) AS max_pos FROM PlaylistVideos WHERE playlist_id = @PlaylistId",
         [["PlaylistId", playlistId, sql.Int]]
@@ -164,7 +225,6 @@ router.post("/:id/videos",
     } else {
       finalPosition = Number(position);
     }
-
 
     // --- Link to playlist ---
     const result = await queryDB(
@@ -183,7 +243,8 @@ router.post("/:id/videos",
   })
 );
 
-router.delete("/:id/videos/:videoId",
+router.delete(
+  "/:id/videos/:videoId",
   auth,
   asyncHandler(async (req, res) => {
     const playlistId = Number(req.params.id);
@@ -220,8 +281,5 @@ router.delete("/:id/videos/:videoId",
     res.json({ message: "Video removed", removed: deleted[0] });
   })
 );
-
-
-
 
 export default router;

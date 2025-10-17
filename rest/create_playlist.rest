@@ -1,7 +1,10 @@
 POST http://localhost:8080/playlists
 Content-Type: application/json
-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNjkwOTA0LCJleHAiOjE3NjEyOTU3MDR9.0eVQXWsdwcM0KT6IdrBG8oxRB7UERJ0xUhQ11RRuNsE
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNzI2MjkxLCJleHAiOjE3NjEzMzEwOTF9.ulN-4U65KQ4GcoKU5hHipA5tR3EFL7N15olISS3Ctsc
 
 {
-  "title": "Super Cool Playlist"
+  "title": "Chill Vibes",
+  "description": "A mix of chill and retro vibes perfect for coding or unwinding.",
+  "is_public": true,
+  "tags": ["LOFI", "retro", "ambient"]
 }
