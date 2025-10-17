@@ -104,7 +104,7 @@ router.post(
       ]
     );
 
-    const resetUrl = `${process.env.BACKEND_URL}/auth/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
     await sendPasswordResetEmail(email, user.username, resetUrl);
 
@@ -113,15 +113,41 @@ router.post(
 );
 
 /**
+ * GET /auth/validate-reset-token?token=...
+ * Confirms whether a password reset token is valid
+ */
+router.get(
+  "/validate-reset-token",
+  asyncHandler(async (req, res) => {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ error: "Missing token" });
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+    const rows = await queryDB(
+      "SELECT * FROM PasswordResets WHERE token = @token",
+      [["token", hashedToken, sql.NVarChar]]
+    );
+    const resetEntry = rows[0];
+
+    if (!resetEntry || resetEntry.expires_at < new Date()) {
+      return res.status(400).json({ error: "Invalid or expired reset token" });
+    }
+
+    res.json({ valid: true });
+  })
+);
+
+
+/**
  * POST /auth/reset-password
  * Resets the user's password using a valid reset token
  */
 router.post(
   "/reset-password",
   asyncHandler(async (req, res) => {
-    const { token, newPassword } = req.body;
+    const { token, password } = req.body;
 
-    if (!token || !newPassword) {
+    if (!token || !password) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -141,7 +167,7 @@ router.post(
     }
 
     // Hash the new password
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
     // Update the user's password
     await queryDB(
