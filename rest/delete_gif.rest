@@ -1,0 +1,2 @@
+DELETE http://localhost:8080/gifs/1002
+Content-Type: application/json
