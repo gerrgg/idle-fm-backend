@@ -1,0 +1,7 @@
+POST http://localhost:8080/playlists
+Content-Type: application/json
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNjkwOTA0LCJleHAiOjE3NjEyOTU3MDR9.0eVQXWsdwcM0KT6IdrBG8oxRB7UERJ0xUhQ11RRuNsE
+
+{
+  "title": "Super Cool Playlist"
+}

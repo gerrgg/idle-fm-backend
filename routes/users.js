@@ -95,6 +95,27 @@ router.post(
   })
 );
 
+router.get('/:id/playlists',
+  asyncHandler(async (req, res) => {
+    const userId = parseInt(req.params.id, 10);
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: "Invalid user ID" });
+    }
+
+    const rows = await queryDB(
+      `
+      SELECT id, title, created_at
+      FROM Playlists
+      WHERE user_id = @userId
+      ORDER BY created_at DESC
+      `,
+      [["userId", userId, sql.Int]]
+    );
+
+    res.json(rows);
+  })
+);
+
 /**
  * Test cookie based authentication
  * This is just for testing purposes and should not be used in production.

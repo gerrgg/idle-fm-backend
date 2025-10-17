@@ -96,6 +96,6 @@ app.use((err, req, res, next) => {
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
   logger.info(`✅ API running on ${process.env.BACKEND_URL}`);
 });

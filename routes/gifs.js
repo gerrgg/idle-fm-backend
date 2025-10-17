@@ -6,9 +6,8 @@ const router = express.Router();
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const pool = await getPool();
-    const result = await pool.request().query("SELECT * FROM Gifs");
-    res.json(result.recordset);
+    const gifs = await queryDB("SELECT * FROM Gifs");
+    res.json(gifs);
   })
 );
 
