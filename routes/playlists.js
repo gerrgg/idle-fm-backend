@@ -316,17 +316,17 @@ router.post(
   })
 );
 
-// Delete a video from a playlist
+// Delete a video from a playlist by YouTube key
 router.delete(
-  "/:id/videos/:videoId",
+  "/:id/videos/:youtubeKey",
   auth,
   asyncHandler(async (req, res) => {
     const playlistId = Number(req.params.id);
-    const videoId = Number(req.params.videoId);
+    const youtubeKey = req.params.youtubeKey;
     const ownerId = req.user.id;
 
-    if (isNaN(playlistId) || isNaN(videoId))
-      return res.status(400).json({ error: "Invalid IDs" });
+    if (isNaN(playlistId) || !youtubeKey)
+      return res.status(400).json({ error: "Invalid parameters" });
 
     // Confirm playlist ownership
     const playlist = await queryDB(
@@ -338,7 +338,17 @@ router.delete(
     if (playlist[0].user_id !== ownerId)
       return res.status(403).json({ error: "Forbidden" });
 
-    // Delete video link from playlist
+    // Find the internal video_id by youtube_key
+    const video = await queryDB(
+      "SELECT id FROM Videos WHERE youtube_key = @Key",
+      [["Key", youtubeKey, sql.NVarChar]]
+    );
+    if (!video.length)
+      return res.status(404).json({ error: "Video not found in database" });
+
+    const videoId = video[0].id;
+
+    // Remove link from playlist
     const deleted = await queryDB(
       `DELETE FROM PlaylistVideos
        OUTPUT DELETED.playlist_id, DELETED.video_id
@@ -352,7 +362,10 @@ router.delete(
     if (!deleted.length)
       return res.status(404).json({ error: "Video not found in playlist" });
 
-    res.json({ message: "Video removed", removed: deleted[0] });
+    res.json({
+      message: "Video removed from playlist",
+      removed: { playlist_id: playlistId, youtube_key: youtubeKey },
+    });
   })
 );
 

@@ -16,6 +16,7 @@ import gifsRouter from "./routes/gifs.js";
 import authRouter from "./routes/auth.js";
 import activationsRouter from "./routes/activations.js";
 import tagsRouter from "./routes/tags.js";
+import youtubeRouter from "./routes/youtube.js";
 
 const app = express();
 
@@ -83,6 +84,7 @@ app.use("/playlists", playlistsRouter);
 app.use("/gifs", gifsRouter);
 app.use("/activate", activationsRouter);
 app.use("/tags", tagsRouter);
+app.use("/youtube", youtubeRouter);
 
 // --- Health Check ---
 app.get("/", (req, res) => {
