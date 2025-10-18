@@ -1,6 +1,6 @@
 POST http://localhost:8080/playlists
 Content-Type: application/json
-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNzI2MjkxLCJleHAiOjE3NjEzMzEwOTF9.ulN-4U65KQ4GcoKU5hHipA5tR3EFL7N15olISS3Ctsc
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MywiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNzQ0NjQ4LCJleHAiOjE3NjEzNDk0NDh9.yONk6h3G9X1fkIy4w61SAMZs33kBfhd7NHMm93T5cHA;
 
 {
   "title": "Chill Vibes",

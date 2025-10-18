@@ -15,6 +15,68 @@ router.get(
   })
 );
 
+// Get a specific playlist by ID
+router.get(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const playlistId = parseInt(req.params.id, 10);
+    if (isNaN(playlistId))
+      return res.status(400).json({ error: "Invalid playlist ID" });
+
+    // Fetch base playlist
+    const playlistRows = await queryDB(
+      "SELECT * FROM Playlists WHERE id = @playlistId",
+      [["playlistId", playlistId, sql.Int]]
+    );
+
+    if (playlistRows.length === 0)
+      return res.status(404).json({ error: "Playlist not found" });
+
+    const playlist = playlistRows[0];
+
+    // Fetch tags
+    const tagRows = await queryDB(
+      `
+      SELECT t.id, t.name
+      FROM PlaylistTags pt
+      INNER JOIN Tags t ON pt.tag_id = t.id
+      WHERE pt.playlist_id = @playlistId
+      ORDER BY t.name ASC
+      `,
+      [["playlistId", playlistId, sql.Int]]
+    );
+
+    // Fetch videos
+    const videoRows = await queryDB(
+      `
+      SELECT 
+        v.id AS video_id,
+        v.youtube_key,
+        v.title AS video_title,
+        g.id AS gif_id,
+        g.tenor_key,
+        g.title AS gif_title,
+        pv.position,
+        pv.added_at
+      FROM PlaylistVideos pv
+      INNER JOIN Videos v ON pv.video_id = v.id
+      LEFT JOIN Gifs g ON pv.gif_id = g.id
+      WHERE pv.playlist_id = @playlistId
+      ORDER BY pv.position ASC
+      `,
+      [["playlistId", playlistId, sql.Int]]
+    );
+
+    res.json({
+      ...playlist,
+      tags: tagRows,
+      videos: videoRows,
+      tag_count: tagRows.length,
+      video_count: videoRows.length,
+    });
+  })
+);
+
 // All playlist-video relationships
 router.get(
   "/videos",
@@ -64,6 +126,7 @@ router.get(
   })
 );
 
+// Create a new playlist
 router.post(
   "/",
   auth,
@@ -93,29 +156,46 @@ router.post(
 
     // 2. Handle tags if provided
     if (tags.length > 0) {
-      for (const tagName of tags) {
-        const lowerTagName = tagName.trim().toLowerCase();
-
-        const tagLookup = await queryDB(
-          `SELECT id FROM Tags WHERE name = @lowerTagName`,
-          [["lowerTagName", lowerTagName, sql.NVarChar]]
-        );
-
+      for (const tag of tags) {
         let tagId;
+        let tagName = null;
 
-        if (tagLookup.length > 0) {
-          tagId = tagLookup[0].id;
-        } else {
-          const insertTag = await queryDB(
-            `INSERT INTO Tags (name) OUTPUT INSERTED.id VALUES (@lowerTagName)`,
-            [["lowerTagName", lowerTagName, sql.NVarChar]]
-          );
-          tagId = insertTag[0].id;
+        if (typeof tag === "object" && tag.id) {
+          // Existing tag object
+          tagId = tag.id;
+        } else if (typeof tag === "object" && tag.name) {
+          // Object missing id, insert or find by name
+          tagName = tag.name.trim().toLowerCase();
+        } else if (typeof tag === "number") {
+          // Already an ID
+          tagId = tag;
+        } else if (typeof tag === "string") {
+          // Raw string name
+          tagName = tag.trim().toLowerCase();
         }
 
+        // Resolve tagId if name provided
+        if (!tagId && tagName) {
+          const tagLookup = await queryDB(
+            `SELECT id FROM Tags WHERE name = @tagName`,
+            [["tagName", tagName, sql.NVarChar]]
+          );
+
+          if (tagLookup.length > 0) {
+            tagId = tagLookup[0].id;
+          } else {
+            const insertTag = await queryDB(
+              `INSERT INTO Tags (name) OUTPUT INSERTED.id VALUES (@tagName)`,
+              [["tagName", tagName, sql.NVarChar]]
+            );
+            tagId = insertTag[0].id;
+          }
+        }
+
+        // Link tag to playlist
         await queryDB(
           `INSERT INTO PlaylistTags (playlist_id, tag_id)
-     VALUES (@playlistId, @tagId)`,
+       VALUES (@playlistId, @tagId)`,
           [
             ["playlistId", playlist.id, sql.Int],
             ["tagId", tagId, sql.Int],
@@ -131,14 +211,7 @@ router.post(
   })
 );
 
-router.get(
-  "/tags",
-  asyncHandler(async (req, res) => {
-    const tags = await queryDB("SELECT * FROM Tags");
-    res.json(tags);
-  })
-);
-
+// Update a specific playlist by ID
 router.post(
   "/:id/videos",
   auth,
@@ -243,6 +316,7 @@ router.post(
   })
 );
 
+// Delete a video from a playlist
 router.delete(
   "/:id/videos/:videoId",
   auth,
@@ -279,6 +353,96 @@ router.delete(
       return res.status(404).json({ error: "Video not found in playlist" });
 
     res.json({ message: "Video removed", removed: deleted[0] });
+  })
+);
+
+// Update playlist
+router.put(
+  "/:id",
+  auth,
+  asyncHandler(async (req, res) => {
+    const { title, description = null, is_public = true, tags = [] } = req.body;
+    const playlistId = Number(req.params.id);
+    if (isNaN(playlistId)) return res.status(400).json({ error: "Invalid ID" });
+
+    // --- Update playlist info ---
+    await queryDB(
+      `UPDATE Playlists
+       SET title=@Title, description=@Description, is_public=@IsPublic
+       WHERE id=@Id`,
+      [
+        ["Title", title, sql.NVarChar],
+        ["Description", description, sql.NVarChar],
+        ["IsPublic", is_public, sql.Bit],
+        ["Id", playlistId, sql.Int],
+      ]
+    );
+
+    // Step 1: Remove old relationships
+    await queryDB(`DELETE FROM PlaylistTags WHERE playlist_id = @PlaylistId`, [
+      ["PlaylistId", playlistId, sql.Int],
+    ]);
+
+    // Step 2: Recreate tag links
+    for (const rawTag of tags) {
+      const tagName =
+        typeof rawTag === "object"
+          ? rawTag.name.trim().toLowerCase()
+          : String(rawTag).trim().toLowerCase();
+
+      if (!tagName) continue;
+
+      // Find or create tag
+      const existing = await queryDB(
+        `SELECT id FROM Tags WHERE name = @TagName`,
+        [["TagName", tagName, sql.NVarChar]]
+      );
+
+      let tagId;
+      if (existing.length > 0) {
+        tagId = existing[0].id;
+      } else {
+        const inserted = await queryDB(
+          `INSERT INTO Tags (name) OUTPUT INSERTED.id VALUES (@TagName)`,
+          [["TagName", tagName, sql.NVarChar]]
+        );
+        tagId = inserted[0].id;
+      }
+
+      // Link tag to playlist
+      await queryDB(
+        `INSERT INTO PlaylistTags (playlist_id, tag_id)
+         VALUES (@PlaylistId, @TagId)`,
+        [
+          ["PlaylistId", playlistId, sql.Int],
+          ["TagId", tagId, sql.Int],
+        ]
+      );
+    }
+
+    // --- Return updated playlist with tags ---
+    const updatedPlaylist = await queryDB(
+      "SELECT * FROM Playlists WHERE id = @Id",
+      [["Id", playlistId, sql.Int]]
+    );
+
+    const tagRows = await queryDB(
+      `
+      SELECT t.id, t.name
+      FROM PlaylistTags pt
+      INNER JOIN Tags t ON pt.tag_id = t.id
+      WHERE pt.playlist_id = @PlaylistId
+      ORDER BY t.name ASC
+      `,
+      [["PlaylistId", playlistId, sql.Int]]
+    );
+
+    res.json({
+      ...updatedPlaylist[0],
+      tags: tagRows,
+      tag_count: tagRows.length,
+      message: "Playlist updated successfully",
+    });
   })
 );
 
