@@ -12,7 +12,7 @@ CREATE TABLE Users (
 CREATE TABLE Activations (
   id INT IDENTITY(1,1) PRIMARY KEY,
   user_id INT NOT NULL,
-  token NVARCHAR(255) NOT NULL,
+  token NVARCHAR(255) NOT NULL UNIQUE,
   expires_at DATETIMEOFFSET NOT NULL DEFAULT DATEADD(HOUR, 24, SYSDATETIMEOFFSET()),
   activated_at DATETIMEOFFSET NULL,
   created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
@@ -27,10 +27,11 @@ CREATE TABLE Playlists (
   user_id INT NOT NULL,
   title NVARCHAR(255) NOT NULL,
   created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
-  views INT DEFAULT 0,
-  likes INT DEFAULT 0,
-  shares INT DEFAULT 0,
-  is_public BIT DEFAULT 1,
+  updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+  views INT NOT NULL DEFAULT 0,
+  likes INT NOT NULL DEFAULT 0,
+  shares INT NOT NULL DEFAULT 0,
+  is_public BIT NOT NULL DEFAULT 1,
   CONSTRAINT FK_Playlists_Users FOREIGN KEY (user_id)
     REFERENCES Users(id)
     ON DELETE CASCADE
@@ -41,20 +42,18 @@ CREATE TABLE Videos (
   id INT IDENTITY(1,1) PRIMARY KEY,
   youtube_key NVARCHAR(50) NOT NULL UNIQUE,
   title NVARCHAR(255),
-  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+  updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
 );
-
-CREATE INDEX idx_videos_youtube_key ON Videos(youtube_key);
 
 -- GIFS
 CREATE TABLE Gifs (
   id INT IDENTITY(1,1) PRIMARY KEY,
   tenor_key NVARCHAR(100) NOT NULL UNIQUE,
   title NVARCHAR(255),
-  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
+  created_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET(),
+  updated_at DATETIMEOFFSET DEFAULT SYSDATETIMEOFFSET()
 );
-
-CREATE INDEX idx_gifs_tenor_key ON Gifs(tenor_key);
 
 -- PLAYLISTVIDEOS (Join Table)
 CREATE TABLE PlaylistVideos (
@@ -75,4 +74,11 @@ CREATE TABLE PlaylistVideos (
     ON DELETE SET NULL
 );
 
-CREATE INDEX idx_playlistvideos_position ON PlaylistVideos(playlist_id, position);
+
+CREATE INDEX idx_playlists_user_id ON Playlists (user_id);
+CREATE INDEX idx_gifs_tenor_key ON Gifs (tenor_key);
+CREATE INDEX idx_playlistvideos_position ON PlaylistVideos (playlist_id, position);
+CREATE INDEX idx_videos_youtube_key ON Videos (youtube_key);
+
+CREATE UNIQUE INDEX idx_users_email ON Users (email);
+CREATE UNIQUE INDEX idx_activations_token ON Activations (token);
