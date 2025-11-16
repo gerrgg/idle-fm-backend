@@ -95,7 +95,8 @@ router.post(
   })
 );
 
-router.get('/:id/playlists',
+router.get(
+  "/:id/playlists",
   asyncHandler(async (req, res) => {
     const userId = parseInt(req.params.id, 10);
     if (isNaN(userId)) {
@@ -104,15 +105,37 @@ router.get('/:id/playlists',
 
     const rows = await queryDB(
       `
-      SELECT id, title, created_at
-      FROM Playlists
-      WHERE user_id = @userId
-      ORDER BY created_at DESC
+      SELECT 
+        p.id,
+        p.title,
+        p.description,
+        p.created_at,
+        p.is_public,
+        (
+          SELECT 
+            v.id,
+            v.youtube_key,
+            v.title,
+            v.created_at
+          FROM PlaylistVideos pv
+          INNER JOIN Videos v ON pv.video_id = v.id
+          WHERE pv.playlist_id = p.id
+          FOR JSON PATH
+        ) AS videos
+      FROM Playlists p
+      WHERE p.user_id = @userId
+      ORDER BY p.created_at DESC
       `,
       [["userId", userId, sql.Int]]
     );
 
-    res.json(rows);
+    // parse JSON string field `videos` into array for convenience
+    const playlists = rows.map((r) => ({
+      ...r,
+      videos: r.videos ? JSON.parse(r.videos) : [],
+    }));
+
+    res.json(playlists);
   })
 );
 

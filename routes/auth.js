@@ -53,8 +53,8 @@ router.post(
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,  
-      sameSite: "none", 
+      secure: true,
+      sameSite: "none",
       path: "/",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -64,7 +64,7 @@ router.post(
       user: {
         id: user.id,
         email: user.email,
-        name: user.name ?? null,
+        username: user.username ?? null,
       },
     });
   })
@@ -143,7 +143,6 @@ router.get(
     res.json({ valid: true });
   })
 );
-
 
 /**
  * POST /auth/reset-password

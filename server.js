@@ -25,10 +25,22 @@ app.set("trust proxy", 1);
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each IP to 20 requests per window
+  max: 100, // limit each IP to 20 requests per window
   message: { error: "Too many authentication attempts. Try again later." },
   standardHeaders: true, // adds RateLimit-* headers
   legacyHeaders: false, // disables deprecated X-RateLimit-* headers
+});
+
+const meEndpointLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100, // More generous but still protected
+  message: { error: "Too many requests. Try again later." },
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // Only 5 login attempts
+  skipSuccessfulRequests: true, // Don't count successful logins
 });
 
 // --- CORS ---
@@ -72,7 +84,12 @@ app.use(cookieParser());
 app.use(
   "/auth",
   (req, res, next) => {
-    if (req.path === "/me") return next();
+    if (req.path === "/me") {
+      return meEndpointLimiter(req, res, next);
+    }
+    if (req.path === "/login") {
+      return loginLimiter(req, res, next);
+    }
     return authLimiter(req, res, next);
   },
   authRouter
