@@ -459,4 +459,31 @@ router.put(
   })
 );
 
+router.delete(
+  "/:id",
+  auth,
+  asyncHandler(async (req, res) => {
+    const playlistId = Number(req.params.id);
+    if (isNaN(playlistId))
+      return res.status(400).json({ error: "Invalid playlist ID" });
+
+    // Confirm ownership
+    const playlist = await queryDB(
+      "SELECT user_id FROM Playlists WHERE id = @PlaylistId",
+      [["PlaylistId", playlistId, sql.Int]]
+    );
+    if (!playlist.length)
+      return res.status(404).json({ error: "Playlist not found" });
+    if (playlist[0].user_id !== req.user.id)
+      return res.status(403).json({ error: "Forbidden" });
+
+    // Delete the playlist
+    await queryDB("DELETE FROM Playlists WHERE id = @PlaylistId", [
+      ["PlaylistId", playlistId, sql.Int],
+    ]);
+
+    res.json({ message: "Playlist deleted successfully" });
+  })
+);
+
 export default router;
