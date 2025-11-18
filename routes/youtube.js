@@ -1,6 +1,7 @@
-// routes/youtube.routes.js
+// routes/youtube.js
+
 import express from "express";
-import fetch from "node-fetch";
+import { searchYouTubeCached } from "../services/youtubeCache.js";
 
 const router = express.Router();
 
@@ -16,34 +17,28 @@ function decodeHtml(str) {
 }
 
 router.get("/search", async (req, res) => {
-  const query = req.query.q;
-  if (!query) return res.status(400).json({ error: "Missing query parameter" });
-
-  const key = process.env.YOUTUBE_API_KEY;
-  const endpoint = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(
-    query
-  )}&key=${key}`;
+  const q = req.query.q;
+  if (!q) return res.status(400).json({ error: "Missing query parameter" });
 
   try {
-    const r = await fetch(endpoint);
-    const data = await r.json();
+    // Use cached search + hydration pipeline
+    const rows = await searchYouTubeCached(q);
 
-    if (data.error) {
-      console.error("YouTube API error:", data.error);
-      return res.status(500).json({ error: "YouTube API error" });
-    }
+    console.log(rows);
 
-    const videos = data.items.map((item) => ({
-      id: item.id.videoId,
-      title: decodeHtml(item.snippet.title),
-      thumbnail: item.snippet.thumbnails.medium.url,
+    return;
+
+    // Convert DB rows to your frontend format
+    const mapped = rows.map((row) => ({
+      id: row.youtube_key,
+      title: decodeHtml(row.title),
+      thumbnail: JSON.parse(row.thumbnails)?.medium?.url,
     }));
 
-    res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.json(videos);
+    res.json(mapped);
   } catch (err) {
-    console.error("YouTube fetch failed:", err);
-    res.status(500).json({ error: "Failed to fetch from YouTube" });
+    console.error(err);
+    res.status(500).json({ error: "Search failed" });
   }
 });
 
