@@ -49,28 +49,38 @@ router.get(
     // Fetch videos
     const videoRows = await queryDB(
       `
-      SELECT 
-        v.id AS video_id,
-        v.youtube_key,
-        v.title AS video_title,
-        g.id AS gif_id,
-        g.tenor_key,
-        g.title AS gif_title,
-        pv.position,
-        pv.added_at
-      FROM PlaylistVideos pv
-      INNER JOIN Videos v ON pv.video_id = v.id
-      LEFT JOIN Gifs g ON pv.gif_id = g.id
-      WHERE pv.playlist_id = @playlistId
-      ORDER BY pv.position ASC
-      `,
+    SELECT
+      pv.position,
+      pv.added_at,
+      v.youtube_key,
+      v.title,
+      v.thumbnails,
+      v.channel_title,
+      v.duration
+    FROM PlaylistVideos pv
+    INNER JOIN Videos v ON pv.video_id = v.id
+    WHERE pv.playlist_id = @playlistId
+    ORDER BY pv.position ASC
+  `,
       [["playlistId", playlistId, sql.Int]]
     );
+
+    // Convert DB rows into the unified frontend shape
+    const hydratedVideos = videoRows.map((v) => ({
+      id: v.youtube_key,
+      youtube_key: v.youtube_key,
+      title: v.title,
+      thumbnails: JSON.parse(v.thumbnails || "{}"),
+      channel_title: v.channel_title,
+      duration: v.duration,
+      position: v.position,
+      added_at: v.added_at,
+    }));
 
     res.json({
       ...playlist,
       tags: tagRows,
-      videos: videoRows,
+      videos: hydratedVideos,
       tag_count: tagRows.length,
       video_count: videoRows.length,
     });
@@ -217,36 +227,33 @@ router.post(
   auth,
   asyncHandler(async (req, res) => {
     const playlistId = Number(req.params.id);
-    if (isNaN(playlistId))
-      return res.status(400).json({ error: "Invalid playlist ID" });
-
     const ownerId = req.user.id;
-    const { youtube_key, title, tenor_key, gif_title, position } = req.body;
+
+    const { youtube_key, title } = req.body;
 
     if (!youtube_key)
       return res.status(400).json({ error: "youtube_key is required" });
 
-    // Confirm playlist ownership
     const playlist = await queryDB(
-      "SELECT id, user_id FROM Playlists WHERE id = @PlaylistId",
+      "SELECT user_id FROM Playlists WHERE id = @PlaylistId",
       [["PlaylistId", playlistId, sql.Int]]
     );
-    if (!playlist.length)
-      return res.status(404).json({ error: "Playlist not found" });
+
+    if (!playlist.length) return res.status(404).json({ error: "Not found" });
     if (playlist[0].user_id !== ownerId)
       return res.status(403).json({ error: "Forbidden" });
 
-    // --- VIDEO: find or create ---
-    let videoId;
-    const videoExisting = await queryDB(
+    // Video find-or-create
+    const existing = await queryDB(
       "SELECT id FROM Videos WHERE youtube_key = @Key",
       [["Key", youtube_key, sql.NVarChar]]
     );
 
-    if (videoExisting.length) {
-      videoId = videoExisting[0].id;
+    let videoId;
+    if (existing.length) {
+      videoId = existing[0].id;
     } else {
-      const insertedVideo = await queryDB(
+      const inserted = await queryDB(
         `INSERT INTO Videos (youtube_key, title)
          OUTPUT INSERTED.id
          VALUES (@Key, @Title)`,
@@ -255,64 +262,52 @@ router.post(
           ["Title", title || null, sql.NVarChar],
         ]
       );
-      videoId = insertedVideo[0].id;
+      videoId = inserted[0].id;
     }
 
-    // --- GIF: optional find or create ---
-    let gifId = null;
-    if (tenor_key) {
-      const gifExisting = await queryDB(
-        "SELECT id FROM Gifs WHERE tenor_key = @Key",
-        [["Key", tenor_key, sql.NVarChar]]
-      );
+    // Compute next position
+    const last = await queryDB(
+      "SELECT ISNULL(MAX(position),0) AS max_pos FROM PlaylistVideos WHERE playlist_id = @PlaylistId",
+      [["PlaylistId", playlistId, sql.Int]]
+    );
 
-      if (gifExisting.length) {
-        gifId = gifExisting[0].id;
-      } else {
-        const insertedGif = await queryDB(
-          `INSERT INTO Gifs (tenor_key, title)
-           OUTPUT INSERTED.id
-           VALUES (@Key, @Title)`,
-          [
-            ["Key", tenor_key, sql.NVarChar],
-            ["Title", gif_title || null, sql.NVarChar],
-          ]
-        );
-        gifId = insertedGif[0].id;
-      }
-    }
+    const position = last[0].max_pos + 1;
 
-    // --- Determine position if not provided ---
-    let finalPosition;
-    if (
-      position === undefined ||
-      position === null ||
-      position === "" ||
-      Number(position) <= 0
-    ) {
-      const last = await queryDB(
-        "SELECT ISNULL(MAX(position), 0) AS max_pos FROM PlaylistVideos WHERE playlist_id = @PlaylistId",
-        [["PlaylistId", playlistId, sql.Int]]
-      );
-      finalPosition = last[0].max_pos + 1;
-    } else {
-      finalPosition = Number(position);
-    }
-
-    // --- Link to playlist ---
-    const result = await queryDB(
-      `INSERT INTO PlaylistVideos (playlist_id, video_id, gif_id, position)
-       OUTPUT INSERTED.playlist_id, INSERTED.video_id, INSERTED.gif_id, INSERTED.position
-       VALUES (@PlaylistId, @VideoId, @GifId, @Position)`,
+    // Link video to playlist
+    const linkRows = await queryDB(
+      `INSERT INTO PlaylistVideos (playlist_id, video_id, position)
+       OUTPUT INSERTED.*
+       VALUES (@PlaylistId, @VideoId, @Position)`,
       [
         ["PlaylistId", playlistId, sql.Int],
         ["VideoId", videoId, sql.Int],
-        ["GifId", gifId, sql.Int],
-        ["Position", finalPosition, sql.Int],
+        ["Position", position, sql.Int],
       ]
     );
 
-    res.status(201).json(result[0]);
+    // Link video to playlist (returns playlist_id, video_id, position)
+    const link = linkRows[0];
+
+    // Fetch full video metadata
+    const videoRows = await queryDB(`SELECT * FROM Videos WHERE id = @id`, [
+      ["id", link.video_id, sql.Int],
+    ]);
+
+    const video = videoRows[0];
+
+    // Return unified object shape
+    res.json({
+      id: video.youtube_key, // so frontend matches search result ids
+      youtube_key: video.youtube_key,
+      title: video.title,
+      thumbnails: JSON.parse(video.thumbnails || "{}"),
+      channel_title: video.channel_title,
+      duration: video.duration,
+      added_at: link.added_at,
+      position: link.position,
+    });
+
+    res.status(201).json(link[0]);
   })
 );
 
