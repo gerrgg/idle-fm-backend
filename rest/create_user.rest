@@ -2,8 +2,8 @@ POST http://localhost:8080/users
 Content-Type: application/json
 
 {
-  "username": "greg",
-  "email": "test@user.com",
+  "username": "admin",
+  "email": "admin@idle.fm",
   "password": "password",
   "confirmPassword": "password"
 }

@@ -1,43 +1,32 @@
-// routes/youtube.js
-
 import express from "express";
 import { searchYouTubeCached } from "../services/youtubeCache.js";
+import { decodeHtml } from "../utils/decodeHtml.js";
 
 const router = express.Router();
-
-function decodeHtml(str) {
-  if (!str) return "";
-  return str
-    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&");
-}
 
 router.get("/search", async (req, res) => {
   const q = req.query.q;
   if (!q) return res.status(400).json({ error: "Missing query parameter" });
 
   try {
-    // Use cached search + hydration pipeline
     const rows = await searchYouTubeCached(q);
 
-    console.log(rows);
+    const mapped = rows.map((row) => {
+      const thumbs = row.thumbnails ? JSON.parse(row.thumbnails) : {};
 
-    return;
-
-    // Convert DB rows to your frontend format
-    const mapped = rows.map((row) => ({
-      id: row.youtube_key,
-      title: decodeHtml(row.title),
-      thumbnail: JSON.parse(row.thumbnails)?.medium?.url,
-    }));
+      return {
+        id: row.youtube_key,
+        title: decodeHtml(row.title),
+        channel: decodeHtml(row.channel_title),
+        duration: row.duration, // raw ISO ("PT3M46S")
+        thumbnails: thumbs, // send entire thumb set
+        thumbnail: thumbs.medium?.url, // primary
+      };
+    });
 
     res.json(mapped);
   } catch (err) {
-    console.error(err);
+    console.error("YouTube search route error:", err);
     res.status(500).json({ error: "Search failed" });
   }
 });
