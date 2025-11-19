@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 export async function runYouTubeSearch(query) {
   const key = process.env.YOUTUBE_API_KEY;
 
-  const endpoint = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=8&q=${encodeURIComponent(
+  const endpoint = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=50&q=${encodeURIComponent(
     query
   )}&key=${key}`;
 

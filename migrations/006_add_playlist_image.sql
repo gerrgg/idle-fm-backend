@@ -1,0 +1,2 @@
+ALTER TABLE Playlists
+ADD image NVARCHAR(500) NULL;

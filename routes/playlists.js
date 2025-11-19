@@ -295,9 +295,33 @@ router.post(
 
     const video = videoRows[0];
 
+    // Check if playlist already has an image
+    const playlistData = await queryDB(
+      `SELECT image FROM Playlists WHERE id = @PlaylistId`,
+      [["PlaylistId", playlistId, sql.Int]]
+    );
+
+    if (!playlistData[0].image) {
+      // Get a usable thumbnail
+      const videoThumb =
+        JSON.parse(video.thumbnails || "{}")?.medium?.url ||
+        JSON.parse(video.thumbnails || "{}")?.default?.url ||
+        null;
+
+      if (videoThumb) {
+        await queryDB(
+          `UPDATE Playlists SET image = @Image WHERE id = @PlaylistId`,
+          [
+            ["Image", videoThumb, sql.NVarChar],
+            ["PlaylistId", playlistId, sql.Int],
+          ]
+        );
+      }
+    }
+
     // Return unified object shape
     res.json({
-      id: video.youtube_key, // so frontend matches search result ids
+      id: video.youtube_key,
       youtube_key: video.youtube_key,
       title: video.title,
       thumbnails: JSON.parse(video.thumbnails || "{}"),
@@ -305,6 +329,7 @@ router.post(
       duration: video.duration,
       added_at: link.added_at,
       position: link.position,
+      playlist_image: playlistData[0].image || "",
     });
 
     res.status(201).json(link[0]);
