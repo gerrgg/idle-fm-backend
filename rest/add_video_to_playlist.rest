@@ -1,8 +1,8 @@
-POST http://localhost:8080/playlists/3/videos
+POST http://localhost:8080/playlists/1009/videos
 Content-Type: application/json
-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYwNzI2MjkxLCJleHAiOjE3NjEzMzEwOTF9.ulN-4U65KQ4GcoKU5hHipA5tR3EFL7N15olISS3Ctsc
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzYzNTcyMzQwLCJleHAiOjE3NjQxNzcxNDB9.ok9pUY7vXq_1t4aPJuAvKf_HaxfLCla5sITCyCe8Lx0
 
 {
   "youtube_key": "4uaPrB00eEc",
-  "title": "ＨＩＧＨ　ＡＴ　ＷＯＲＫ"
+  "title": "ＨＩＧＨ　ＡＴ　ＷＯＲＫ;Drop table videos; --",
 }

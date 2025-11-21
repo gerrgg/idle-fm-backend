@@ -111,12 +111,14 @@ router.get(
         p.description,
         p.created_at,
         p.is_public,
+        p.image,
         (
           SELECT 
             v.id,
             v.youtube_key,
             v.title,
-            v.created_at
+            v.created_at,
+            v.duration
           FROM PlaylistVideos pv
           INNER JOIN Videos v ON pv.video_id = v.id
           WHERE pv.playlist_id = p.id
