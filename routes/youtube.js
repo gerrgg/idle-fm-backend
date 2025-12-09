@@ -12,15 +12,29 @@ router.get("/search", async (req, res) => {
     const rows = await searchYouTubeCached(q);
 
     const mapped = rows.map((row) => {
-      const thumbs = row.thumbnails ? JSON.parse(row.thumbnails) : {};
+      let thumbs = {};
+
+      try {
+        if (row.thumbnails) {
+          thumbs =
+            typeof row.thumbnails === "string"
+              ? JSON.parse(row.thumbnails)
+              : row.thumbnails;
+        }
+      } catch (e) {
+        console.warn("Invalid thumbnail JSON for:", row.youtube_key);
+        thumbs = {};
+      }
+
+      const primaryThumb = thumbs?.medium?.url || thumbs?.default?.url || null;
 
       return {
         id: row.youtube_key,
-        title: decodeHtml(row.title),
-        channel: decodeHtml(row.channel_title),
-        duration: row.duration, // raw ISO ("PT3M46S")
-        thumbnails: thumbs, // send entire thumb set
-        thumbnail: thumbs.medium?.url, // primary
+        title: decodeHtml(row.title ?? ""),
+        channel: decodeHtml(row.channel_title ?? ""),
+        duration: row.duration ?? null,
+        thumbnails: thumbs,
+        thumbnail: primaryThumb,
       };
     });
 

@@ -3,6 +3,7 @@ import sql from "mssql";
 import { queryDB, asyncHandler } from "../utils/dbHelpers.js";
 import { auth } from "../middleware/auth.js";
 import { generateUniqueTitle } from "../utils/playlistHelpers.js";
+import { dbConfig } from "../config/dbConfig.js";
 
 const router = express.Router();
 
@@ -20,69 +21,77 @@ router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const playlistId = parseInt(req.params.id, 10);
-    if (isNaN(playlistId))
-      return res.status(400).json({ error: "Invalid playlist ID" });
 
-    // Fetch base playlist
-    const playlistRows = await queryDB(
-      "SELECT * FROM Playlists WHERE id = @playlistId",
-      [["playlistId", playlistId, sql.Int]]
-    );
-
-    if (playlistRows.length === 0)
-      return res.status(404).json({ error: "Playlist not found" });
-
-    const playlist = playlistRows[0];
-
-    // Fetch tags
-    const tagRows = await queryDB(
+    const rows = await queryDB(
       `
-      SELECT t.id, t.name
-      FROM PlaylistTags pt
-      INNER JOIN Tags t ON pt.tag_id = t.id
-      WHERE pt.playlist_id = @playlistId
-      ORDER BY t.name ASC
+      SELECT 
+        p.id,
+        p.title,
+        p.description,
+        p.created_at,
+        p.is_public,
+        p.image,
+        p.user_id AS owner_id,
+        u.username as owner_username,
+        (
+          SELECT 
+            v.id,
+            v.youtube_key,
+            v.duration,
+            v.title,
+            pv.added_at,
+            v.channel_title,
+            JSON_QUERY(v.thumbnails) AS thumbnails
+          FROM PlaylistVideos pv
+          INNER JOIN Videos v ON pv.video_id = v.id
+          WHERE pv.playlist_id = p.id
+          ORDER BY pv.position
+          FOR JSON PATH
+        ) AS videos,
+
+        (
+          SELECT 
+            t.id,
+            t.name
+          FROM PlaylistTags pt
+          INNER JOIN Tags t ON pt.tag_id = t.id
+          WHERE pt.playlist_id = p.id
+          ORDER BY t.name ASC
+          FOR JSON PATH
+        ) AS tags
+
+      FROM Playlists p
+      JOIN Users u ON p.user_id = u.id
+      WHERE p.id = @playlistId
       `,
       [["playlistId", playlistId, sql.Int]]
     );
 
-    // Fetch videos
-    const videoRows = await queryDB(
-      `
-    SELECT
-      pv.position,
-      pv.added_at,
-      v.youtube_key,
-      v.title,
-      v.thumbnails,
-      v.channel_title,
-      v.duration
-    FROM PlaylistVideos pv
-    INNER JOIN Videos v ON pv.video_id = v.id
-    WHERE pv.playlist_id = @playlistId
-    ORDER BY pv.position ASC
-  `,
-      [["playlistId", playlistId, sql.Int]]
-    );
+    if (!rows.length) return res.status(404).json({ error: "Not found" });
 
-    // Convert DB rows into the unified frontend shape
-    const hydratedVideos = videoRows.map((v) => ({
-      id: v.youtube_key,
-      youtube_key: v.youtube_key,
-      title: v.title,
-      thumbnails: JSON.parse(v.thumbnails || "{}"),
-      channel_title: v.channel_title,
-      duration: v.duration,
-      position: v.position,
-      added_at: v.added_at,
-    }));
+    const r = rows[0];
+
+    const videos = r.videos ? JSON.parse(r.videos) : [];
+    const videoIds = videos.map((v) => v.id);
+
+    const tags = r.tags ? JSON.parse(r.tags) : [];
+    const tagIds = tags.map((t) => t.id);
 
     res.json({
-      ...playlist,
-      tags: tagRows,
-      videos: hydratedVideos,
-      tag_count: tagRows.length,
-      video_count: videoRows.length,
+      playlist: {
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        created_at: r.created_at,
+        is_public: r.is_public,
+        image: r.image,
+        owner_id: r.owner_id,
+        owner_username: r.owner_username,
+        videoIds,
+        tagIds,
+      },
+      videos,
+      tags,
     });
   })
 );
@@ -133,6 +142,61 @@ router.get(
       video_count: rows.length,
       videos: rows,
     });
+  })
+);
+
+// PUT /playlists/:id/reorder
+router.put(
+  "/:id/reorder",
+  asyncHandler(async (req, res) => {
+    const playlistId = parseInt(req.params.id, 10);
+    const { videoIds } = req.body; // array of IDs: [201, 105, 300, ...]
+
+    if (!Array.isArray(videoIds) || videoIds.length === 0) {
+      return res
+        .status(400)
+        .json({ error: "videoIds must be a non-empty array" });
+    }
+
+    const tx = new sql.Transaction();
+
+    try {
+      await tx.begin();
+
+      // One single UPDATE using OPENJSON
+      const request = new sql.Request(tx);
+      await request
+        .input("playlistId", sql.Int, playlistId)
+        .input("json", sql.NVarChar, JSON.stringify(videoIds)).query(`
+          ;WITH Positions AS (
+            SELECT 
+              value AS videoId,
+              ROW_NUMBER() OVER (ORDER BY [key]) - 1 AS pos
+            FROM OPENJSON(@json)
+          )
+          UPDATE pv
+          SET pv.position = p.pos
+          FROM PlaylistVideos pv
+          INNER JOIN Positions p
+            ON p.videoId = pv.video_id
+          WHERE pv.playlist_id = @playlistId;
+        `);
+
+      await tx.commit();
+
+      res.json({
+        success: true,
+        playlistId,
+        newOrder: videoIds,
+      });
+    } catch (err) {
+      console.error("REORDER ERROR:", err);
+      await tx.rollback();
+      res.status(500).json({
+        error: "Database error",
+        details: err.message,
+      });
+    }
   })
 );
 
@@ -234,16 +298,18 @@ router.post(
     if (!youtube_key)
       return res.status(400).json({ error: "youtube_key is required" });
 
+    // Check ownership
     const playlist = await queryDB(
       "SELECT user_id FROM Playlists WHERE id = @PlaylistId",
       [["PlaylistId", playlistId, sql.Int]]
     );
 
     if (!playlist.length) return res.status(404).json({ error: "Not found" });
+
     if (playlist[0].user_id !== ownerId)
       return res.status(403).json({ error: "Forbidden" });
 
-    // Video find-or-create
+    // Find or create Video
     const existing = await queryDB(
       "SELECT id FROM Videos WHERE youtube_key = @Key",
       [["Key", youtube_key, sql.NVarChar]]
@@ -265,7 +331,7 @@ router.post(
       videoId = inserted[0].id;
     }
 
-    // Compute next position
+    // Determine next position
     const last = await queryDB(
       "SELECT ISNULL(MAX(position),0) AS max_pos FROM PlaylistVideos WHERE playlist_id = @PlaylistId",
       [["PlaylistId", playlistId, sql.Int]]
@@ -273,7 +339,7 @@ router.post(
 
     const position = last[0].max_pos + 1;
 
-    // Link video to playlist
+    // Insert into PlaylistVideos
     const linkRows = await queryDB(
       `INSERT INTO PlaylistVideos (playlist_id, video_id, position)
        OUTPUT INSERTED.*
@@ -285,43 +351,36 @@ router.post(
       ]
     );
 
-    // Link video to playlist (returns playlist_id, video_id, position)
     const link = linkRows[0];
 
-    // Fetch full video metadata
+    // Fetch video metadata
     const videoRows = await queryDB(`SELECT * FROM Videos WHERE id = @id`, [
-      ["id", link.video_id, sql.Int],
+      ["id", videoId, sql.Int],
     ]);
 
     const video = videoRows[0];
 
-    // Check if playlist already has an image
-    const playlistData = await queryDB(
-      `SELECT image FROM Playlists WHERE id = @PlaylistId`,
-      [["PlaylistId", playlistId, sql.Int]]
-    );
+    // If playlist has no image yet, set one
+    let playlistImage = playlist[0].image;
 
-    if (!playlistData[0].image) {
-      // Get a usable thumbnail
-      const videoThumb =
-        JSON.parse(video.thumbnails || "{}")?.medium?.url ||
-        JSON.parse(video.thumbnails || "{}")?.default?.url ||
-        null;
+    if (!playlistImage) {
+      const thumbs = JSON.parse(video.thumbnails || "{}");
+      playlistImage = thumbs.medium?.url || thumbs.default?.url || null;
 
-      if (videoThumb) {
+      if (playlistImage) {
         await queryDB(
           `UPDATE Playlists SET image = @Image WHERE id = @PlaylistId`,
           [
-            ["Image", videoThumb, sql.NVarChar],
+            ["Image", playlistImage, sql.NVarChar],
             ["PlaylistId", playlistId, sql.Int],
           ]
         );
       }
     }
 
-    // Return unified object shape
+    // Return final unified object
     res.json({
-      id: video.youtube_key,
+      id: video.id,
       youtube_key: video.youtube_key,
       title: video.title,
       thumbnails: JSON.parse(video.thumbnails || "{}"),
@@ -329,62 +388,75 @@ router.post(
       duration: video.duration,
       added_at: link.added_at,
       position: link.position,
-      playlist_image: playlistData[0].image || "",
+      playlist_image: playlistImage,
     });
-
-    res.status(201).json(link[0]);
   })
 );
 
-// Delete a video from a playlist by YouTube key
 router.delete(
-  "/:id/videos/:youtubeKey",
+  "/:playlistId/videos/:videoId",
   auth,
   asyncHandler(async (req, res) => {
-    const playlistId = Number(req.params.id);
-    const youtubeKey = req.params.youtubeKey;
-    const ownerId = req.user.id;
+    const playlistId = Number(req.params.playlistId);
+    const videoId = Number(req.params.videoId);
+    const userId = req.user.id;
 
-    if (isNaN(playlistId) || !youtubeKey)
+    if (isNaN(playlistId) || isNaN(videoId)) {
       return res.status(400).json({ error: "Invalid parameters" });
+    }
 
-    // Confirm playlist ownership
-    const playlist = await queryDB(
-      "SELECT user_id FROM Playlists WHERE id = @PlaylistId",
-      [["PlaylistId", playlistId, sql.Int]]
+    // 1. Validate ownership
+    const ownerRow = await queryDB(
+      `SELECT user_id FROM Playlists WHERE id = @pid`,
+      [["pid", playlistId, sql.Int]]
     );
-    if (!playlist.length)
+
+    if (!ownerRow.length) {
       return res.status(404).json({ error: "Playlist not found" });
-    if (playlist[0].user_id !== ownerId)
+    }
+
+    if (ownerRow[0].user_id !== userId) {
       return res.status(403).json({ error: "Forbidden" });
+    }
 
-    // Find the internal video_id by youtube_key
-    const video = await queryDB(
-      "SELECT id FROM Videos WHERE youtube_key = @Key",
-      [["Key", youtubeKey, sql.NVarChar]]
-    );
-    if (!video.length)
-      return res.status(404).json({ error: "Video not found in database" });
-
-    const videoId = video[0].id;
-
-    // Remove link from playlist
-    const deleted = await queryDB(
-      `DELETE FROM PlaylistVideos
-       OUTPUT DELETED.playlist_id, DELETED.video_id
-       WHERE playlist_id = @PlaylistId AND video_id = @VideoId`,
+    // 2. Delete join row
+    const deletedRows = await queryDB(
+      `
+      DELETE FROM PlaylistVideos
+      OUTPUT DELETED.playlist_id, DELETED.video_id, DELETED.position
+      WHERE playlist_id = @pid AND video_id = @vid
+      `,
       [
-        ["PlaylistId", playlistId, sql.Int],
-        ["VideoId", videoId, sql.Int],
+        ["pid", playlistId, sql.Int],
+        ["vid", videoId, sql.Int],
       ]
     );
 
-    if (!deleted.length)
+    if (!deletedRows.length) {
       return res.status(404).json({ error: "Video not found in playlist" });
+    }
+
+    // 3. Reindex remaining positions
+    await queryDB(
+      `
+      WITH Ordered AS (
+        SELECT video_id, ROW_NUMBER() OVER (ORDER BY position) - 1 AS newPos
+        FROM PlaylistVideos
+        WHERE playlist_id = @pid
+      )
+      UPDATE pv
+      SET pv.position = o.newPos
+      FROM PlaylistVideos pv
+      JOIN Ordered o ON pv.video_id = o.video_id
+      WHERE pv.playlist_id = @pid
+      `,
+      [["pid", playlistId, sql.Int]]
+    );
 
     res.json({
-      message: "Video removed from playlist",
-      removed: { playlist_id: playlistId, youtube_key: youtubeKey },
+      message: "Video removed",
+      playlistId,
+      videoId,
     });
   })
 );
@@ -411,12 +483,10 @@ router.put(
       ]
     );
 
-    // Step 1: Remove old relationships
     await queryDB(`DELETE FROM PlaylistTags WHERE playlist_id = @PlaylistId`, [
       ["PlaylistId", playlistId, sql.Int],
     ]);
 
-    // Step 2: Recreate tag links
     for (const rawTag of tags) {
       const tagName =
         typeof rawTag === "object"
@@ -453,7 +523,6 @@ router.put(
       );
     }
 
-    // --- Return updated playlist with tags ---
     const updatedPlaylist = await queryDB(
       "SELECT * FROM Playlists WHERE id = @Id",
       [["Id", playlistId, sql.Int]]
@@ -471,9 +540,15 @@ router.put(
     );
 
     res.json({
-      ...updatedPlaylist[0],
-      tags: tagRows,
-      tag_count: tagRows.length,
+      playlist: {
+        id: updatedPlaylist[0].id,
+        title: updatedPlaylist[0].title,
+        description: updatedPlaylist[0].description,
+        is_public: updatedPlaylist[0].is_public,
+        image: updatedPlaylist[0].image,
+        tagIds: tagRows.map((t) => t.id), // FIXED — returns only IDs
+      },
+      tags: tagRows, // frontend normalizer needs this
       message: "Playlist updated successfully",
     });
   })
@@ -503,6 +578,40 @@ router.delete(
     ]);
 
     res.json({ message: "Playlist deleted successfully" });
+  })
+);
+
+router.put(
+  "/:id/image",
+  auth,
+  asyncHandler(async (req, res) => {
+    const playlistId = Number(req.params.id);
+    const ownerId = req.user.id;
+    const { image } = req.body;
+
+    if (!playlistId || !image) {
+      return res.status(400).json({ error: "Invalid image update request" });
+    }
+
+    const playlist = await queryDB(
+      "SELECT user_id FROM Playlists WHERE id = @id",
+      [["id", playlistId, sql.Int]]
+    );
+
+    if (!playlist.length) {
+      return res.status(404).json({ error: "Playlist not found" });
+    }
+
+    if (playlist[0].user_id !== ownerId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    await queryDB("UPDATE Playlists SET image = @image WHERE id = @id", [
+      ["image", image, sql.NVarChar],
+      ["id", playlistId, sql.Int],
+    ]);
+
+    res.json({ playlistId, image });
   })
 );
 
