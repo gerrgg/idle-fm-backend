@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import sql from "mssql";
 import { queryDB } from "../utils/dbHelpers.js";
-import { sendActivationEmail } from "../utils/mailer.js";
+import { sendActivationEmail } from "../utils/emailService.js";
 
 export async function createActivation(user) {
   const token = crypto.randomBytes(32).toString("hex");

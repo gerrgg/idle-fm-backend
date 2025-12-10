@@ -31,3 +31,8 @@ data/
 # IDE configs
 .vscode/
 .idea/
+sendgrid.env
+
+sqlpackage
+*bacpac
+*.zip

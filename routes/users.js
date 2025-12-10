@@ -3,7 +3,7 @@ import { queryDB, asyncHandler } from "../utils/dbHelpers.js";
 import bcrypt from "bcrypt";
 import sql from "mssql";
 import crypto from "crypto";
-import { sendActivationEmail } from "../utils/mailer.js";
+import { sendActivationEmail } from "../utils/emailService.js";
 import { auth } from "../middleware/auth.js";
 
 const router = express.Router();

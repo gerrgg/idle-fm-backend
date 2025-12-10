@@ -7,7 +7,7 @@ import crypto from "crypto";
 import { createActivation } from "../utils/createActivation.js";
 import { auth } from "../middleware/auth.js";
 import { isProduction } from "../config/dbConfig.js";
-import { sendPasswordResetEmail } from "../utils/mailer.js";
+import { sendPasswordResetEmail } from "../utils/emailService.js";
 
 const router = express.Router();
 
