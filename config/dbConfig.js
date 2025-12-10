@@ -17,8 +17,8 @@ export const dbConfig = {
   password: process.env.MSSQL_PASSWORD,
   database: process.env.MSSQL_DATABASE,
   options: {
-    encrypt: process.env.NODE_ENV === "production",
-    trustServerCertificate: process.env.NODE_ENV !== "production",
+    encrypt: process.env.MSSQL_ENCRYPT === "true",
+    trustServerCertificate: process.env.MSSQL_TRUST_CERT === "true",
   },
 };
 

@@ -1,0 +1,10 @@
+POST http://localhost:8080/admin/generate-playlist
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJhZG1pbkBpZGxlLmZtIiwiaWF0IjoxNzY1Mjk0NzYxLCJleHAiOjE3NjU4OTk1NjF9.e8r6GZghCKFHZjgmaEVqBgDfFDMPf0QEPAURRnXD7r8;
+Content-Type: application/json
+
+{
+  "title": "Trap Instrumentals",
+  "description": "Hard-hitting beats with deep bass and clean 808s.",
+  "tags": ["trap", "instrumental", "808"],
+  "videoLimit": 30
+}

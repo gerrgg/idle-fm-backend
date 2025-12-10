@@ -17,6 +17,7 @@ import authRouter from "./routes/auth.js";
 import activationsRouter from "./routes/activations.js";
 import tagsRouter from "./routes/tags.js";
 import youtubeRouter from "./routes/youtube.js";
+import adminRouter from "./routes/adminPlaylists.js";
 
 const app = express();
 
@@ -43,10 +44,9 @@ const loginLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful logins
 });
 
-// --- CORS ---
 const allowedOrigins = isProduction
   ? ["https://idle.fm", "https://www.idle.fm"]
-  : ["http://localhost:5173"];
+  : ["http://localhost:5173", "http://localhost:4173"];
 
 app.use(
   helmet({
@@ -55,9 +55,20 @@ app.use(
   })
 );
 
+app.use((req, res, next) => {
+  console.log("Origin:", req.headers.origin);
+  next();
+});
+
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -102,6 +113,7 @@ app.use("/gifs", gifsRouter);
 app.use("/activate", activationsRouter);
 app.use("/tags", tagsRouter);
 app.use("/youtube", youtubeRouter);
+app.use("/admin", adminRouter);
 
 // --- Health Check ---
 app.get("/", (req, res) => {

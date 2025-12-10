@@ -16,6 +16,162 @@ router.get(
   })
 );
 
+router.get(
+  "/public",
+  asyncHandler(async (req, res) => {
+    const rows = await queryDB(
+      `
+      SELECT 
+      p.id,
+      p.title,
+      p.description,
+      p.created_at,
+      p.is_public,
+      p.image,
+      p.user_id AS owner_id,
+      u.username AS owner_username,
+       p.likes,
+      p.shares,
+      p.views,
+      (
+        SELECT 
+          v.id,
+          v.youtube_key,
+          v.title,
+          v.duration,
+          pv.added_at,
+          v.channel_title,
+          JSON_QUERY(v.thumbnails) AS thumbnails
+        FROM PlaylistVideos pv
+        INNER JOIN Videos v ON pv.video_id = v.id
+        WHERE pv.playlist_id = p.id
+        ORDER BY pv.position
+        FOR JSON PATH
+      ) AS videos,
+      (
+        SELECT 
+          t.id,
+          t.name
+        FROM PlaylistTags pt
+        INNER JOIN Tags t ON pt.tag_id = t.id
+        WHERE pt.playlist_id = p.id
+        ORDER BY t.name ASC
+        FOR JSON PATH
+      ) AS tags
+    FROM Playlists p
+    JOIN Users u ON p.user_id = u.id
+    ORDER BY p.created_at DESC
+      `
+    );
+
+    const normalized = rows.map((r) => {
+      const videos = r.videos ? JSON.parse(r.videos) : [];
+      const videoIds = videos.map((v) => v.id);
+
+      const tags = r.tags ? JSON.parse(r.tags) : [];
+      const tagIds = tags.map((t) => t.id);
+
+      return {
+        playlist: {
+          id: r.id,
+          title: r.title,
+          description: r.description,
+          created_at: r.created_at,
+          is_public: r.is_public,
+          image: r.image,
+          owner_id: r.owner_id,
+          owner_username: r.owner_username,
+          videoIds,
+          tagIds,
+          views: r.views ?? 0,
+          likes: r.likes ?? 0,
+          shares: r.shares ?? 0,
+        },
+        videos,
+        tags,
+      };
+    });
+
+    res.json(normalized);
+  })
+);
+
+router.post(
+  "/:id/view",
+  asyncHandler(async (req, res) => {
+    const playlistId = req.params.id;
+
+    await queryDB("UPDATE Playlists SET views = views + 1 WHERE id = @id", [
+      ["id", playlistId, sql.Int],
+    ]);
+
+    res.json({ message: "View counted" });
+  })
+);
+
+router.post(
+  "/:id/like",
+  auth,
+  asyncHandler(async (req, res) => {
+    const playlistId = req.params.id;
+    const userId = req.user.id;
+
+    // check if already liked
+    const likedRows = await queryDB(
+      "SELECT id FROM PlaylistLikes WHERE user_id=@user AND playlist_id=@p",
+      [
+        ["user", userId, sql.Int],
+        ["p", playlistId, sql.Int],
+      ]
+    );
+
+    if (likedRows.length > 0) {
+      // UNLIKE
+      await queryDB(
+        "DELETE FROM PlaylistLikes WHERE user_id=@user AND playlist_id=@p",
+        [
+          ["user", userId, sql.Int],
+          ["p", playlistId, sql.Int],
+        ]
+      );
+
+      await queryDB("UPDATE Playlists SET likes = likes - 1 WHERE id = @id", [
+        ["id", playlistId, sql.Int],
+      ]);
+
+      return res.json({ liked: false });
+    }
+
+    // LIKE
+    await queryDB(
+      "INSERT INTO PlaylistLikes (user_id, playlist_id) VALUES (@u, @p)",
+      [
+        ["u", userId, sql.Int],
+        ["p", playlistId, sql.Int],
+      ]
+    );
+
+    await queryDB("UPDATE Playlists SET likes = likes + 1 WHERE id = @id", [
+      ["id", playlistId, sql.Int],
+    ]);
+
+    res.json({ liked: true });
+  })
+);
+
+router.post(
+  "/:id/share",
+  asyncHandler(async (req, res) => {
+    const playlistId = req.params.id;
+
+    await queryDB("UPDATE Playlists SET shares = shares + 1 WHERE id = @id", [
+      ["id", playlistId, sql.Int],
+    ]);
+
+    res.json({ message: "Share counted" });
+  })
+);
+
 // Get a specific playlist by ID
 router.get(
   "/:id",
@@ -33,6 +189,9 @@ router.get(
         p.image,
         p.user_id AS owner_id,
         u.username as owner_username,
+        p.likes,
+        p.shares,
+        p.views,
         (
           SELECT 
             v.id,
@@ -89,6 +248,9 @@ router.get(
         owner_username: r.owner_username,
         videoIds,
         tagIds,
+        views: r.views ?? 0,
+        likes: r.likes ?? 0,
+        shares: r.shares ?? 0,
       },
       videos,
       tags,
@@ -148,6 +310,7 @@ router.get(
 // PUT /playlists/:id/reorder
 router.put(
   "/:id/reorder",
+  auth,
   asyncHandler(async (req, res) => {
     const playlistId = parseInt(req.params.id, 10);
     const { videoIds } = req.body; // array of IDs: [201, 105, 300, ...]
@@ -554,6 +717,7 @@ router.put(
   })
 );
 
+// Delete Playlist
 router.delete(
   "/:id",
   auth,
@@ -581,6 +745,7 @@ router.delete(
   })
 );
 
+// Update playlist Cover Image
 router.put(
   "/:id/image",
   auth,

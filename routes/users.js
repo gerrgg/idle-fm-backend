@@ -95,10 +95,14 @@ router.post(
   })
 );
 
+/**
+ * GET /users/:id/playlists
+ */
 router.get(
   "/:id/playlists",
   asyncHandler(async (req, res) => {
     const userId = parseInt(req.params.id, 10);
+
     if (isNaN(userId)) {
       return res.status(400).json({ error: "Invalid user ID" });
     }
@@ -113,6 +117,10 @@ router.get(
         p.is_public,
         p.image,
         p.user_id AS owner_id,
+        u.username AS owner_username,
+        p.likes,
+        p.shares,
+        p.views,
         (
           SELECT 
             v.id,
@@ -121,7 +129,8 @@ router.get(
             v.duration,
             pv.added_at,
             v.channel_title,
-            JSON_QUERY(v.thumbnails) AS thumbnails
+            JSON_QUERY(v.thumbnails) AS thumbnails,
+            pv.position
           FROM PlaylistVideos pv
           INNER JOIN Videos v ON pv.video_id = v.id
           WHERE pv.playlist_id = p.id
@@ -142,24 +151,15 @@ router.get(
 
       FROM Playlists p
       JOIN Users u ON p.user_id = u.id
+      WHERE p.user_id = @userId 
       ORDER BY p.created_at DESC
       `,
       [["userId", userId, sql.Int]]
     );
 
-    const userResponse = await queryDB(
-      `SELECT * FROM Users WHERE id = @userId`,
-      [["userId", userId, sql.Int]]
-    );
-
-    const userRow = userResponse[0];
-
     const normalized = rows.map((r) => {
       const videos = r.videos ? JSON.parse(r.videos) : [];
-      const videoIds = videos.map((v) => v.id);
-
       const tags = r.tags ? JSON.parse(r.tags) : [];
-      const tagIds = tags.map((t) => t.id);
 
       return {
         playlist: {
@@ -169,13 +169,24 @@ router.get(
           created_at: r.created_at,
           is_public: r.is_public,
           image: r.image,
-          owner_id: userId,
-          owner_username: userRow?.username ?? null,
-          videoIds,
-          tagIds,
+          owner_id: r.owner_id,
+          owner_username: r.owner_username,
+          videoIds: videos.map((v) => v.id),
+          tagIds: tags.map((t) => t.id),
+          views: r.views ?? 0,
+          likes: r.likes ?? 0,
+          shares: r.shares ?? 0,
         },
-        videos,
-        tags,
+
+        videos: videos,
+        tags: tags,
+
+        playlistVideos: videos.map((v) => ({
+          playlistId: r.id,
+          videoId: v.id,
+          added_at: v.added_at,
+          position: v.position,
+        })),
       };
     });
 

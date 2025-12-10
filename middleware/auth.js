@@ -6,6 +6,8 @@ export function auth(req, res, next) {
 
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
+    req.user.isAdmin = req.user.id === 1;
+
     next();
   } catch {
     res.status(403).json({ error: "Invalid token" });
