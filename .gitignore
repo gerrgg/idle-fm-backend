@@ -36,3 +36,5 @@ sendgrid.env
 sqlpackage
 *bacpac
 *.zip
+sql/*
+IdleFM_*

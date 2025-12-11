@@ -13,13 +13,13 @@ const router = express.Router();
  * Fetch all users
  *
  */
-router.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const users = await queryDB("SELECT * FROM Users");
-    res.json(users);
-  })
-);
+// router.get(
+//   "/",
+//   asyncHandler(async (req, res) => {
+//     const users = await queryDB("SELECT * FROM Users");
+//     res.json(users);
+//   })
+// );
 
 /**
  * POST /users

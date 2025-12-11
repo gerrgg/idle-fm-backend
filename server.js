@@ -46,7 +46,7 @@ const loginLimiter = rateLimit({
 
 const allowedOrigins = isProduction
   ? ["https://idle.fm", "https://www.idle.fm"]
-  : ["http://localhost:5173", "http://localhost:4173"];
+  : ["http://localhost:5174", "http://localhost:4173"];
 
 app.use(
   helmet({
